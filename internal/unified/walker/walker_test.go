@@ -230,6 +230,25 @@ func TestIndex_RelativeSourcesRootKeepsRelativePaths(t *testing.T) {
 	}
 }
 
+func TestIndex_CVEOutsideCvesSubtreeIsIgnored(t *testing.T) {
+	// upstream cvelistV5 ships test fixtures and helper scripts that may
+	// include CVE-*.json files outside cvelistV5-main/cves/. Only the
+	// catalog subtree is the real advisory source — anything else must
+	// not pollute the index.
+	root := t.TempDir()
+	writeFile(t, root, "cve/cvelistV5-main/cves/2024/0xxx/CVE-2024-0001.json", "{}")
+	writeFile(t, root, "cve/cvelistV5-main/tests/fixtures/CVE-9999-0001.json", "{}")
+	writeFile(t, root, "cve/cvelistV5-main/CVE-9999-0002.json", "{}")
+
+	got, err := walker.Index(context.Background(), root)
+	if err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+	if len(got) != 1 || got["CVE-2024-0001"] == nil {
+		t.Fatalf("Index: got %v, want only CVE-2024-0001", keys(got))
+	}
+}
+
 func TestIndex_CVEFilenameWithoutCVEPrefixIsIgnored(t *testing.T) {
 	// delta.json, deltaLog.json etc. live alongside CVE-*.json under the
 	// upstream cvelistV5 repo; they are not advisory records and must not

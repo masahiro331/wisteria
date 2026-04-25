@@ -146,7 +146,11 @@ func walkOSV(ctx context.Context, sourcesRoot string, out map[string][]unified.I
 }
 
 func walkCVE(ctx context.Context, sourcesRoot string, out map[string][]unified.IndexEntry) error {
-	cveRoot := filepath.Join(sourcesRoot, "cve")
+	// Walk only the catalog subtree (design §4). The upstream cvelistV5
+	// repo also ships fixtures / examples named CVE-*.json under
+	// tests/, schemas/, etc. — those are not real advisories and would
+	// pollute the index if we walked the whole `cve/` tree.
+	cveRoot := filepath.Join(sourcesRoot, "cve", "cvelistV5-main", "cves")
 	if _, err := os.Stat(cveRoot); os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
