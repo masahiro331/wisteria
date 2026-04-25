@@ -42,3 +42,16 @@ Fetchers expose `WithBaseURL` / `WithArchiveURL` and `WithHTTPClient` options so
 - Keep new source integrations behind the `Fetcher` interface so `cmd/fetch.go` stays uniform.
 - Branch-per-feature PRs: do not commit directly to `main`. For each functional unit of work, create a dedicated branch and open a PR.
 - No Claude attribution in git or GitHub artifacts: commit messages, PR titles, and PR bodies must not include `Co-Authored-By: Claude ...`, `🤖 Generated with [Claude Code]`, or any other Claude/Anthropic signature line. Enforced by the `commit-lint` workflow.
+
+## Codex review
+
+Use Codex as a second-opinion reviewer at two trigger points:
+
+1. **Stuck in implementation.** If three consecutive attempts at the same fix fail to make `make test` pass, or a non-trivial design decision needs a sanity check, hand the situation to Codex via the `codex:codex-rescue` subagent. Surface Codex's diagnosis to the user before continuing.
+2. **After a commit on any non-`main` branch passes `make test`.** Run a Codex review automatically right after the commit. Skip on `main`. Also skip when the commit is doc-only, formatting/cosmetic-only, or otherwise has no behavioral change (e.g. typo fix, comment rewording, gofmt-only). When in doubt, run the review.
+
+Mechanics for trigger 2:
+
+- Input: the full branch diff (`git diff main...HEAD`) plus all directly related design docs under `docs/design/`. If no design doc applies, say so explicitly when invoking Codex.
+- Caller: `codex:codex-rescue` subagent.
+- Disposition: relay every Codex finding to the user, preserving each finding's severity (High/Medium/Low), affected files/lines, and Codex's overall verdict verbatim. Claude may add its own recommendation per finding but must not drop, re-rank, or downgrade items based on its own judgment. Do not auto-apply fixes — the user decides whether to address each point in a follow-up commit.
