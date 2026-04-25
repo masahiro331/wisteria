@@ -96,6 +96,15 @@ func TestMergeReferences(t *testing.T) {
 				{URL: "https://example.com"},
 			},
 		},
+		{
+			name: "percent-encoded path byte %2F preserved when trailing slash stripped",
+			in: []unified.Reference{
+				{URL: "https://example.com/a%2Fb/"},
+			},
+			want: []unified.Reference{
+				{URL: "https://example.com/a%2Fb"},
+			},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

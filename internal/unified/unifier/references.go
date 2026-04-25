@@ -64,6 +64,9 @@ func normalizeURL(raw string) string {
 	u.RawFragment = ""
 	if strings.HasSuffix(u.Path, "/") {
 		u.Path = strings.TrimRight(u.Path, "/")
+		if u.RawPath != "" {
+			u.RawPath = strings.TrimRight(u.RawPath, "/")
+		}
 	}
 	return u.String()
 }
