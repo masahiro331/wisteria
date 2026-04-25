@@ -1,14 +1,15 @@
 # 設計: Unified Advisory
 
-Phase 1 で取得した OSV / MITRE CVEListV5 のローカル JSON を走査し、PrimaryID をキーに各ソースの advisory を 1 レコードへフィールド単位で semantic merge する。
+Phase 1 で取得した OSV / MITRE CVEListV5 のローカル JSON を walker で走査し、PrimaryID をキーに各ソースの advisory を 1 レコードへフィールド単位で semantic merge する。CISA KEV カタログは別経路で扱い、merge 後の unified ファイルに後付けでアノテートする (Stage 4, §5.2)。
 
 関連: `docs/SYSTEM_OVERVIEW.md`、`docs/ROADMAP.md` (Phase 1)
 
 ## 1. ゴール
 
-- fetch 済みディレクトリを walk して `map[PrimaryID][]IndexEntry` の索引を作る (Stage 1)。
+- fetch 済みディレクトリ (OSV / CVE5) を walk して `map[PrimaryID][]IndexEntry` の索引を作る (Stage 1)。
 - 索引を元に各ファイルを full parse し、フィールド単位で semantic merge した UnifiedAdvisory を構築する (Stage 2)。
 - UnifiedAdvisory を PrimaryID 別の JSON ファイルとして書き出す (Stage 3)。
+- 既存 unified ファイルに KEV カタログのメタデータを後付けでアノテートする (Stage 4)。
 - CVE-ID を持たない advisory (AlmaLinux ALBA-*、Go GO-* など) も保持する。
 - Phase 2 (AI 処理) と Phase 3 (DB 投入) の入力となる中間表現を提供する。
 - 同じロジックを `wisteria debug` から個別に叩けるようにし、マージルールの妥当性を実データで検証できるようにする。
@@ -24,7 +25,7 @@ Phase 1 で取得した OSV / MITRE CVEListV5 のローカル JSON を走査し�
 ## 3. 用語
 
 - **Advisory**: 1 ファイル = N 脆弱性レコード。1 つのアドバイザリーが複数の脆弱性 ID を持つことがある (例: 複数 CVE-ID を 1 つの別 ID にまとめる、CVE-ID と GHSA-ID が両方ついている)。
-- **CVE-ID**: 統合の第一候補キー。OSV は `aliases` 配列に CVE-ID を含むことがある。CVE5 はファイル名 = CVE-ID で必ず存在する。
+- **CVE-ID**: 統合の第一候補キー。OSV は `aliases` 配列に CVE-ID を含むことがある。CVE5 はファイル名 = CVE-ID で必ず存在する。KEV カタログの各エントリは `cveID` フィールドで必ず CVE-ID を持つ。
 - **PrimaryID**: UnifiedAdvisory の主キー。CVE-ID があれば CVE-ID、無ければ source 由来 ID。
 - **SourceIDs**: PrimaryID 以外の識別子をすべて並列保持する配列 (GHSA-ID、PYSEC-ID、ALBA-ID 等)。
 - **UnifiedAdvisory**: 同一 PrimaryID を持つ複数 advisory をフィールド単位で merge した中間表現。
@@ -36,6 +37,8 @@ Phase 1 で取得した OSV / MITRE CVEListV5 のローカル JSON を走査し�
 2. OSV ファイルの `aliases` に CVE-ID が N 個ある場合: N 個それぞれを独立した PrimaryID として扱う。同じ OSV ファイルが N 個の UnifiedAdvisory に出現する。
 3. OSV ファイルに CVE-ID alias が無い場合: `id` を PrimaryID とする (standalone)。
 4. SourceIDs は PrimaryID 以外の全 alias と OSV `id` を集めて dedup + 辞書順で並べる。
+
+KEV は walker / unifier (Stage 1-3) では扱わない。Stage 4 (Annotate, §5.2) で KEV カタログを読み、既存 unified ファイルに KEV メタを追記する。KEV エントリの `cveID` は PrimaryID への lookup key としてのみ使い、UnifiedAdvisory.SourceIDs には影響しない。
 
 例 (入力 → PrimaryID, SourceIDs):
 
@@ -53,7 +56,8 @@ Phase 1 で取得した OSV / MITRE CVEListV5 のローカル JSON を走査し�
 <cache-dir>/
 ├── sources/                                    ← raw download 先 (fetcher の出力)
 │   ├── osv/<ecosystem>/*.json
-│   └── cve/cvelistV5-main/cves/<year>/<bucket>/CVE-*.json
+│   ├── cve/cvelistV5-main/cves/<year>/<bucket>/CVE-*.json
+│   └── kev/known_exploited_vulnerabilities.json
 └── unified/                                    ← merge 後 (本設計の出力)
     ├── cve/<year>/<CVE-ID>.json                ← PrimaryID が CVE-ID
     └── standalone/<ecosystem>/<id>.json        ← PrimaryID が source 由来 ID
@@ -61,26 +65,37 @@ Phase 1 で取得した OSV / MITRE CVEListV5 のローカル JSON を走査し�
 
 - `<year>` は CVE-ID (`CVE-YYYY-NNNN`) から抽出。1 ディレクトリのファイル数を抑え FS / ツール (ls, grep) を実用範囲に保つ。
 - `<ecosystem>` は OSV の ecosystem 名そのまま (例: `AlmaLinux`、`Go`、`PyPI`)。スペースは `_` に置換 (`Rocky Linux` → `Rocky_Linux`)。
+- KEV は単一 JSON ファイル (`known_exploited_vulnerabilities.json`)。fetcher は archive を扱わず GET → 保存のみ。
 - 1 PrimaryID = 1 ファイル。毎回フル再構築 (§5.1)。
 
 ## 5. パイプライン
 
 ```
-Stage 1: Walk    → map[PrimaryID][]IndexEntry             (索引のみ。中身は読まない*)
-Stage 2: Unify   → []UnifiedAdvisory                      (各 IndexEntry を full parse + semantic merge)
-Stage 3: Write   → <cache-dir>/unified/cve/<year>/<CVE-ID>.json
-                   <cache-dir>/unified/standalone/<ecosystem>/<id>.json
+Stage 1: Walk     → map[PrimaryID][]IndexEntry            (索引のみ。中身は読まない*)
+Stage 2: Unify    → []UnifiedAdvisory                     (各 IndexEntry を full parse + semantic merge)
+Stage 3: Write    → <cache-dir>/unified/cve/<year>/<CVE-ID>.json
+                    <cache-dir>/unified/standalone/<ecosystem>/<id>.json
+Stage 4: Annotate → 既存 unified JSON を読み、KEV メタを `kev` フィールドに追記して書き戻す
 ```
 
 (*) PrimaryID 決定のために OSV の `id` と `aliases` だけは読む。SourceRecord 等の構築はせず、map を作るためだけの軽量読み込み。
 
-3 stage を直列に実行する。各 stage は独立した関数。
+4 stage を直列に実行する。各 stage は独立した関数。
 
 ### 5.1 増分更新はしない (毎回フル再構築)
 
 unify 実行時は `<cache-dir>/unified` を最初に削除してから書き直す。
 
 理由: 当初 standalone advisory として保存された (例: `GHSA-xxxx`) ものに、後日 `aliases: ["CVE-2024-9999"]` が付くケースがある。差分更新方式や上書き方式だと過去の standalone レコードが消えず二重に残る。フル削除 → フル書き直しなら毎回最新 sources の状態だけを反映できる。
+
+### 5.2 Stage 4: Annotate (KEV 後付け)
+
+Stage 1-3 が書き出した unified ファイル群に対し、KEV カタログ 1 ファイル (`<sourcesRoot>/kev/known_exploited_vulnerabilities.json`) を読み込んで、各エントリの `cveID` に該当する unified ファイルを開き `KEV` フィールドを更新して書き戻す。
+
+- 該当 PrimaryID の unified ファイルが存在しない場合は **skip + log で確定** (PR 9 はこの動作で実装)。KEV カタログには CVE-ID が付くだけで他 source に観測されていない CVE もありうる前提。これを「KEV だけの standalone unified」として作るかは将来の拡張として §14 に残す。
+- ファイル更新は temp file → rename で atomic。
+- Stage 4 は Stage 3 への依存があるため、`wisteria unify` は 1-3-4 を直列で回す。
+- KEV 後付けは Stage 1-3 のフル再構築の後段で行うので、毎回最新 KEV を反映できる (差分更新の懸念なし)。
 
 ## 6. パッケージ構成 (新規分)
 
@@ -94,6 +109,9 @@ internal/
     ├── cve/
     │   ├── cve.go              # CVE5 schema (必要フィールドのみ)
     │   └── cve_test.go
+    ├── kev/
+    │   ├── kev.go              # KEV schema (catalog + entry)
+    │   └── kev_test.go
     ├── walker/
     │   ├── walker.go           # Stage 1
     │   └── walker_test.go
@@ -103,12 +121,15 @@ internal/
     ├── writer/
     │   ├── writer.go           # Stage 3
     │   └── writer_test.go
+    ├── annotator/
+    │   ├── annotator.go        # Stage 4 (KEV を既存 unified ファイルに追記)
+    │   └── annotator_test.go
     └── inspect/
         ├── inspect.go          # 観察ヘルパ (フィールド分布集計、サンプル抽出など)
         └── inspect_test.go
 
 cmd/
-├── unify.go                    # production: 3 stage を直列実行
+├── unify.go                    # production: Stage 1-4 を直列実行
 └── debug/                      # 観察用サブコマンド (1 サブコマンド = 1 ファイル)
     ├── debug.go                # `wisteria debug` の親コマンド
     ├── index.go                # `wisteria debug index`
@@ -127,6 +148,7 @@ type SourceKind string
 const (
     SourceOSV SourceKind = "osv"
     SourceCVE SourceKind = "cve"
+    SourceKEV SourceKind = "kev"
 )
 
 // Provenance は merge 前の出所追跡情報。raw データ本体は <cache-dir>/sources/
@@ -174,6 +196,23 @@ type AffectedRecord struct {
     CVE  *cve.Affected   `json:"cve,omitempty"`
 }
 
+// KEVRecord は KEV カタログの 1 エントリを保持する exploit シグナル。
+// Stage 4 (Annotate, §5.2) で既存 UnifiedAdvisory に追記される。
+// 同じ CVE-ID に複数 source がある場合でも KEV エントリは 1 件 (CVE-ID 一意)。
+type KEVRecord struct {
+    From                       Provenance `json:"from"`
+    VendorProject              string     `json:"vendor_project,omitempty"`
+    Product                    string     `json:"product,omitempty"`
+    VulnerabilityName          string     `json:"vulnerability_name,omitempty"`
+    DateAdded                  string     `json:"date_added,omitempty"`         // YYYY-MM-DD
+    ShortDescription           string     `json:"short_description,omitempty"`
+    RequiredAction             string     `json:"required_action,omitempty"`
+    DueDate                    string     `json:"due_date,omitempty"`           // YYYY-MM-DD
+    KnownRansomwareCampaignUse string     `json:"known_ransomware_campaign_use,omitempty"`
+    Notes                      string     `json:"notes,omitempty"`
+    CWEs                       []string   `json:"cwes,omitempty"`
+}
+
 // UnifiedAdvisory は PrimaryID をキーに各 source をフィールド単位で merge した中間表現。
 type UnifiedAdvisory struct {
     PrimaryID    string           `json:"primary_id"`
@@ -182,14 +221,16 @@ type UnifiedAdvisory struct {
     References   []Reference      `json:"references"`           // dedup + 辞書順
     Severities   []Severity       `json:"severities"`           // dedup
     Affected     []AffectedRecord `json:"affected"`             // 並列保持
+    KEV          *KEVRecord       `json:"kev,omitempty"`        // KEV カタログ入りの場合のみ非 nil
     Provenances  []Provenance     `json:"provenances"`          // 出所一覧
 }
 ```
 
-OSV / CVE の struct は公式 schema から Phase 1 で必要なフィールドだけ定義する。
+OSV / CVE / KEV の struct は公式 schema から Phase 1 で必要なフィールドだけ定義する。
 
 - OSV: `id`、`aliases`、`summary`、`details`、`affected[]`、`references[]`、`severity[]`
 - CVE5: `cveMetadata.cveId`、`containers.cna.descriptions[]`、`containers.cna.affected[]`、`containers.cna.references[]`、`containers.cna.metrics[]`
+- KEV: catalog top-level (`title`、`catalogVersion`、`dateReleased`、`count`)、`vulnerabilities[]` 各エントリの全フィールド
 
 ## 8. マージルール
 
@@ -218,6 +259,8 @@ var sourcePriority = []string{
 
 ベンダー名は `<SourceKind>.<ecosystem>` 形式 (例: `osv.AlmaLinux`)。CVE5 は `cve.mitre` で固定。配列に含まれない source は末尾扱い。
 
+KEV はベンダー / advisory ではなく exploit 既知シグナルなので優先度配列には入れない。Description / Severity / Reference / Affected の merge には参加せず、UnifiedAdvisory の専用フィールド `KEV *KEVRecord` (§7) にだけ載せる。
+
 ### 8.2 References
 
 - URL を正規化してから dedup
@@ -244,7 +287,15 @@ var sourcePriority = []string{
 - merge せず並列保持
 - 並び順: 優先度配列順 → Provenance.ID 順
 
-### 8.6 マージ実装の方針
+### 8.6 KEV
+
+KEV は merge ではなく Stage 4 (Annotate, §5.2) で個別ファイルに直接書き戻す。詳細は Stage 4 の I/F (§9 末尾) を参照。
+
+- KEV エントリは `cveID` で一意 (KEV カタログ内で重複しない前提)。
+- 既存 `UnifiedAdvisory.KEV` がある場合 (= Stage 4 を 2 回連続で走らせた場合) は最新カタログの値で完全置換。
+- KEV カタログに該当 CVE-ID が無い既存 UnifiedAdvisory は `KEV` を nil のまま (= 触らない)。
+
+### 8.7 マージ実装の方針
 
 - フィールドごとに pure function で書く (`mergeReferences(...) []Reference` 等)
 - 各 pure function に table-driven test を書く
@@ -267,6 +318,7 @@ func Index(ctx context.Context, sourcesRoot string) (map[string][]unified.IndexE
   - aliases に CVE-ID が N 個あれば、各 CVE-ID 配下に同じ IndexEntry を N 個登録 (§3.1)
   - aliases に CVE-ID が無い (または aliases フィールド自体が無い) record は `id` を PrimaryID にして 1 個登録 (standalone)
 - `<sourcesRoot>/cve/cvelistV5-main/cves/**/CVE-*.json`: ファイル名から CVE-ID を抽出 (中身を読まない)
+- KEV (`<sourcesRoot>/kev/`) は walker の対象外。Stage 4 で別途読み込む (§5.2)
 - SourceKind / Source は `<sourcesRoot>/<kind>/<ecosystem>/...` のディレクトリ階層から決定的に取る
 - ctx キャンセルを尊重する
 
@@ -329,6 +381,24 @@ func Write(ctx context.Context, cacheDir string, records []unified.UnifiedAdviso
 - temp file → rename でファイル単位 atomic write
 - ファイル名は PrimaryID をそのまま使う。FS で危険な文字 (`/`, `:`) は `_` に置換 (例: `ALBA-2019:0973` → `ALBA-2019_0973.json`)
 
+### Stage 4: Annotator
+
+```go
+// internal/unified/annotator/annotator.go
+package annotator
+
+// AnnotateKEV は cacheDir/sources/kev/known_exploited_vulnerabilities.json を読み、
+// 各 KEV エントリの cveID に対応する cacheDir/unified/cve/<year>/<CVE-ID>.json を
+// 開いて UnifiedAdvisory.KEV を上書きし、temp file → rename で書き戻す。
+// 該当 unified ファイルが存在しなければ skip + log。
+func AnnotateKEV(ctx context.Context, cacheDir string, logger *slog.Logger) error
+```
+
+- KEV カタログが存在しない場合 (KEV fetch 未実行) は no-op + warn。error は返さない
+- ファイル更新は temp file → rename で atomic
+- KEV エントリが指す CVE-ID に対応する unified ファイルが存在しない場合: **初期実装は skip + log で確定**。KEV-only UnifiedAdvisory を新規生成するかどうかは将来の拡張として §14 に残す。PR 9 はこの skip + log コントラクトを満たすように実装する
+- `wisteria unify` は Stage 1-3 の後に Stage 4 を直列で呼ぶ。Stage 4 単体は `wisteria debug annotate` でも叩ける (PR 9 で追加)
+
 ### Inspect (観察ヘルパ)
 
 `internal/unified/inspect/inspect.go` に置く。debug コマンドから呼ばれる前提で、production パイプラインからは呼ばない。提供する API:
@@ -350,6 +420,7 @@ wisteria unify --cache-dir <path>
 - 入力ルートは `<cache-dir>/sources` を内部で組み立てる
 - `--cache-dir` のデフォルト解決ルールは既存の `fetch` と共通
 - parse 失敗時は fail-fast (`unifier.Unify` を呼ぶ)。skip + log の挙動は `wisteria debug unify` を使う
+- Stage 1-3 完了後に Stage 4 (`annotator.AnnotateKEV`) を呼ぶ。KEV カタログ未取得なら warn + skip
 
 ### Debug コマンド (production binary に同梱)
 
@@ -422,13 +493,15 @@ internal/unified/testdata/
 ## 13. PR 分割
 
 1. **PR 1 (preparation)**: fetcher の出力先を `<cache-dir>/sources/{osv,cve}/...` に変更
-2. **PR 2 (schema)**: `internal/unified/{osv,cve}` schema 型 + unmarshal テスト
-3. **PR 3 (walker + PrimaryID)**: `internal/unified/walker` + PrimaryID 決定ロジック (§3.1)
-4. **PR 4 (debug 骨格)**: `cmd/debug/` の親コマンド + `debug index` (PR 5/6 のマージルール検証を実データで回せるよう先に刺す)
-5. **PR 5 (unifier core)**: 中核型 + References / Severities の merge + `debug unify` 最初の出力
-6. **PR 6 (unifier rest)**: Descriptions / Affected の並列保持 + `debug unify` 完成形
-7. **PR 7 (inspect + debug fields)**: `internal/unified/inspect` + `wisteria debug fields`
-8. **PR 8 (production wiring)**: `internal/unified/writer` + `cmd/unify.go`
+2. **PR 1.5 (KEV fetcher)**: `internal/fetcher/kev` 追加 + `wisteria fetch kev` / `fetch all` 統合 (本 PR)
+3. **PR 2 (schema)**: `internal/unified/{osv,cve,kev}` schema 型 + unmarshal テスト
+4. **PR 3 (walker + PrimaryID)**: `internal/unified/walker` + PrimaryID 決定ロジック (§3.1)
+5. **PR 4 (debug 骨格)**: `cmd/debug/` の親コマンド + `debug index` (PR 5/6 のマージルール検証を実データで回せるよう先に刺す)
+6. **PR 5 (unifier core)**: 中核型 + References / Severities の merge + `debug unify` 最初の出力
+7. **PR 6 (unifier rest)**: Descriptions / Affected の並列保持 + `debug unify` 完成形
+8. **PR 7 (inspect + debug fields)**: `internal/unified/inspect` + `wisteria debug fields`
+9. **PR 8 (production wiring)**: `internal/unified/writer` + `cmd/unify.go` (Stage 1-3)
+10. **PR 9 (KEV annotator)**: `internal/unified/annotator` (Stage 4) + `cmd/unify.go` への配線 + `wisteria debug annotate`
 
 各 PR は branch-per-feature 方針に従う。
 
@@ -443,3 +516,4 @@ internal/unified/testdata/
 - **並行性**: 初版は直列実装で決定。PR 8 で全データ処理時間を計測し、許容できないなら `errgroup` + 上限付き並列を後付けする。fetcher と同じ pattern を流用する。
 - **Inspect API シグネチャ** (PR 7): `FieldStats` / `Sample` の引数・戻り値は debug コマンドの要求に合わせて確定する。
 - **ファイル名エスケープ規則** (PR 8): `:` を `_` に置換する暫定方針。standalone advisory に `:` 以外の危険文字 (`/`, `\`, NUL) が含まれる ID が出現したら拡張する。元 ID は JSON 本体の `primary_id` に保持するので往復可能。
+- **KEV 単独 CVE-ID の扱い** (将来拡張): 初期実装 (PR 9) は skip + log で確定 (§5.2 / §9 Stage 4)。KEV カタログには載っているが OSV / CVE5 のいずれにも観測されていない CVE-ID については、KEV だけの最小 UnifiedAdvisory を生成するかどうかが将来の拡張ポイント。実データで件数を確認した後、必要なら別 PR で対応する。

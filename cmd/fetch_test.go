@@ -13,6 +13,7 @@ func TestRoot_CacheDirFlagInheritedBySubcommands(t *testing.T) {
 	cases := [][]string{
 		{"fetch", "osv"},
 		{"fetch", "cve"},
+		{"fetch", "kev"},
 		{"fetch", "all"},
 	}
 	for _, path := range cases {
@@ -21,6 +22,9 @@ func TestRoot_CacheDirFlagInheritedBySubcommands(t *testing.T) {
 			cmd, _, err := root.Find(path)
 			if err != nil {
 				t.Fatalf("Find(%v): %v", path, err)
+			}
+			if cmd.Name() != path[len(path)-1] {
+				t.Fatalf("Find(%v) returned %q, want %q", path, cmd.Name(), path[len(path)-1])
 			}
 			if cmd.Flag(cacheDirFlag) == nil {
 				t.Fatalf("--%s not inherited by %v", cacheDirFlag, path)

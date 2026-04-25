@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Wisteria is a free, fast vulnerability database builder. It is a Go CLI that aggregates data from public sources (OSV, MITRE CVEListV5) and — across later phases — enriches it with AI-generated summaries and stores everything in PostgreSQL.
+Wisteria is a free, fast vulnerability database builder. It is a Go CLI that aggregates data from public sources (OSV, MITRE CVEListV5, CISA KEV) and — across later phases — enriches it with AI-generated summaries and stores everything in PostgreSQL.
 
 See `docs/meetings/2026-04-25-project-design.md` for the full requirements list and phase plan.
 
@@ -25,16 +25,17 @@ See `docs/meetings/2026-04-25-project-design.md` for the full requirements list 
 ## Architecture
 
 - `main.go` — entrypoint; wires signal-aware context into the root command.
-- `cmd/` — Cobra command tree. `fetch` subcommands (`osv`, `cve`, `all`) delegate to fetchers via the `fetcher.Fetcher` interface.
+- `cmd/` — Cobra command tree. `fetch` subcommands (`osv`, `cve`, `kev`, `all`) delegate to fetchers via the `fetcher.Fetcher` interface.
 - `internal/fetcher/fetcher.go` — defines the `Fetcher` interface (`Name()`, `Fetch(ctx) (dir, error)`). New sources implement this interface so commands can treat them uniformly.
 - `internal/fetcher/osv/` — OSV fetcher; reads `ecosystems.txt` then downloads each `{ecosystem}/all.zip`. Downloads run in parallel via `errgroup` with a configurable cap (`--concurrency`, default 4); the first error cancels in-flight siblings. Each archive is unzipped in place and removed.
 - `internal/fetcher/cve/` — MITRE CVEListV5 fetcher; downloads the repo tarball, extracts it, and removes the tarball.
+- `internal/fetcher/kev/` — CISA Known Exploited Vulnerabilities fetcher; downloads `known_exploited_vulnerabilities.json` (single file, no archive).
 - `internal/fetcher/progress/` — fetcher-side progress UI; thin mpb wrapper used by fetchers and `cmd/fetch`.
 - `internal/x/archive/` — `Zip` and `TarGz` helpers; both reject zip-slip / tar-slip entries.
 - `internal/x/http/` (package `xhttp`) — `DoWithRetry` wraps `http.Client.Do` with exponential backoff + jitter. Retries transport errors and 5xx; 4xx are returned as-is. Default 3 attempts (`--retries`).
 - `internal/x/cachedir/` — resolves and creates per-source cache directories. Root precedence: explicit override (`--cache-dir`) → `WISTERIA_CACHE_DIR` env → `os.UserCacheDir()/wisteria`. Per-source dirs are placed under `<root>/sources/<source>/` so the unified pipeline can write into a sibling `<root>/unified/` subtree. Path-resolution only; not a cache layer with eviction.
 
-Fetchers expose `WithBaseURL` / `WithArchiveURL` and `WithHTTPClient` options so tests can inject `httptest.Server`. Tests override `HOME` and `XDG_CACHE_HOME` to redirect cache writes into `t.TempDir()`.
+Fetchers expose `WithBaseURL` (osv) / `WithArchiveURL` (cve) / `WithCatalogURL` (kev) and `WithHTTPClient` options so tests can inject `httptest.Server`. Tests override `HOME` and `XDG_CACHE_HOME` to redirect cache writes into `t.TempDir()`.
 
 ## Conventions
 

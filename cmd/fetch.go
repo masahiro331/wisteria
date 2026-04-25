@@ -8,6 +8,7 @@ import (
 
 	"github.com/masahiro331/wisteria/internal/fetcher"
 	"github.com/masahiro331/wisteria/internal/fetcher/cve"
+	"github.com/masahiro331/wisteria/internal/fetcher/kev"
 	"github.com/masahiro331/wisteria/internal/fetcher/osv"
 	"github.com/masahiro331/wisteria/internal/fetcher/progress"
 )
@@ -40,6 +41,14 @@ func cveFactory(opts fetchOptions) fetcher.Fetcher {
 	)
 }
 
+func kevFactory(opts fetchOptions) fetcher.Fetcher {
+	return kev.New(
+		kev.WithCacheDir(opts.cacheDir),
+		kev.WithProgress(opts.tracker),
+		kev.WithRetries(opts.retries),
+	)
+}
+
 func optionsFromCmd(cmd *cobra.Command) fetchOptions {
 	cacheDir, _ := cmd.Flags().GetString(cacheDirFlag)
 	concurrency, _ := cmd.Flags().GetInt(concurrencyFlag)
@@ -60,6 +69,7 @@ func newFetchCmd() *cobra.Command {
 	c.AddCommand(
 		newFetchSourceCmd("osv", "Fetch OSV vulnerability data", osvFactory),
 		newFetchSourceCmd("cve", "Fetch MITRE CVEListV5 data", cveFactory),
+		newFetchSourceCmd("kev", "Fetch CISA Known Exploited Vulnerabilities catalog", kevFactory),
 		newFetchAllCmd(),
 	)
 	return c
@@ -95,7 +105,7 @@ func newFetchAllCmd() *cobra.Command {
 		Use:   "all",
 		Short: "Fetch every supported source",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			factories := []fetcherFactory{osvFactory, cveFactory}
+			factories := []fetcherFactory{osvFactory, cveFactory, kevFactory}
 			for _, factory := range factories {
 				f := factory(optionsFromCmd(cmd))
 				dir, err := f.Fetch(cmd.Context())
