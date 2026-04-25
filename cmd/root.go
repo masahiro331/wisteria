@@ -1,6 +1,10 @@
 package cmd
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/spf13/cobra"
+
+	"github.com/masahiro331/wisteria/cmd/debug"
+)
 
 const (
 	cacheDirFlag    = "cache-dir"
@@ -29,5 +33,6 @@ func NewRootCmd() *cobra.Command {
 		"max attempts per HTTP request before giving up (retries on 5xx and transport errors)",
 	)
 	root.AddCommand(newFetchCmd())
+	root.AddCommand(debug.NewCmd())
 	return root
 }
