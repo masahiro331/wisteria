@@ -4,12 +4,12 @@ package cve
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 
+	"github.com/masahiro331/wisteria/internal/fetcher"
 	"github.com/masahiro331/wisteria/internal/fetcher/progress"
 	"github.com/masahiro331/wisteria/internal/x/archive"
 	"github.com/masahiro331/wisteria/internal/x/cachedir"
@@ -89,7 +89,7 @@ func (f *Fetcher) Fetch(ctx context.Context) (string, error) {
 	}
 
 	dest := filepath.Join(dir, path.Base(f.archiveURL))
-	if err := writeArchive(dest, resp, f.progress.Bar(sourceName, resp.ContentLength)); err != nil {
+	if err := fetcher.WriteResponse(dest, resp, f.progress.Bar(sourceName, resp.ContentLength)); err != nil {
 		return "", err
 	}
 	f.progress.Wait()
@@ -101,25 +101,4 @@ func (f *Fetcher) Fetch(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("remove archive %s: %w", dest, err)
 	}
 	return dir, nil
-}
-
-func writeArchive(dest string, resp *http.Response, bar *progress.Bar) error {
-	out, err := os.Create(dest)
-	if err != nil {
-		return err
-	}
-	body := bar.ProxyReader(resp.Body)
-	if _, err := io.Copy(out, body); err != nil {
-		_ = body.Close()
-		_ = out.Close()
-		return fmt.Errorf("write %s: %w", dest, err)
-	}
-	if err := body.Close(); err != nil {
-		_ = out.Close()
-		return fmt.Errorf("close body: %w", err)
-	}
-	if err := out.Close(); err != nil {
-		return fmt.Errorf("close %s: %w", dest, err)
-	}
-	return nil
 }

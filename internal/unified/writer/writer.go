@@ -52,18 +52,11 @@ var cveIDPattern = regexp.MustCompile(`^CVE-(\d{4})-\d+$`)
 // Keyed by absolute bucket path.
 var bucketMkdir sync.Map // map[string]struct{}
 
-// Init validates cacheDir, derives outDir = <cacheDir>/unified, and
-// returns it. It does NOT delete or create outDir — the caller is
-// expected to do RemoveAll + MkdirAll before streaming Write calls.
-// The split exists so per-record fan-out can run without coordinating
-// the one-shot tree reset.
-//
-// Init also clears the package-level bucket-mkdir cache: a second call
-// in the same process means the caller is about to RemoveAll outDir,
-// and a stale cache hit would skip the MkdirAll on the next Write and
-// then fail at CreateTemp on a missing parent.
-func Init(cacheDir string) (string, error) {
-	bucketMkdir.Clear()
+// OutDir derives the unified output directory from cacheDir without
+// touching the filesystem. Read-only callers (annotator, debug tools)
+// use this when they only need the path, not the destination guard
+// or the tree reset that Init / Reset perform.
+func OutDir(cacheDir string) (string, error) {
 	if cacheDir == "" {
 		return "", errors.New("writer: cacheDir is empty")
 	}
@@ -79,6 +72,26 @@ func Init(cacheDir string) (string, error) {
 	if filepath.Base(outDir) != outSubdir {
 		return "", fmt.Errorf("writer: derived outDir %q does not end in %q", outDir, outSubdir)
 	}
+	return outDir, nil
+}
+
+// Init validates cacheDir, derives outDir = <cacheDir>/unified, and
+// returns it. It does NOT delete or create outDir — the caller is
+// expected to do RemoveAll + MkdirAll before streaming Write calls,
+// or call Reset to do both in one step.
+// The split exists so per-record fan-out can run without coordinating
+// the one-shot tree reset.
+//
+// Init also clears the package-level bucket-mkdir cache: a second call
+// in the same process means the caller is about to RemoveAll outDir,
+// and a stale cache hit would skip the MkdirAll on the next Write and
+// then fail at CreateTemp on a missing parent.
+func Init(cacheDir string) (string, error) {
+	bucketMkdir.Clear()
+	outDir, err := OutDir(cacheDir)
+	if err != nil {
+		return "", err
+	}
 	info, err := os.Lstat(outDir)
 	switch {
 	case os.IsNotExist(err):
@@ -91,6 +104,36 @@ func Init(cacheDir string) (string, error) {
 		return "", fmt.Errorf("writer: %s is not a directory, refusing to use", outDir)
 	}
 	return outDir, nil
+}
+
+// Reset runs Init, then RemoveAll + MkdirAll on the resulting outDir so
+// callers (cmd/unify) can start a fresh write fan-out in one call. The
+// guard inside Init keeps the destruction target bounded to a wisteria
+// "unified" subdirectory.
+func Reset(cacheDir string) (string, error) {
+	outDir, err := Init(cacheDir)
+	if err != nil {
+		return "", err
+	}
+	if err := os.RemoveAll(outDir); err != nil {
+		return "", fmt.Errorf("writer: clear %s: %w", outDir, err)
+	}
+	if err := os.MkdirAll(outDir, 0o750); err != nil {
+		return "", fmt.Errorf("writer: recreate %s: %w", outDir, err)
+	}
+	return outDir, nil
+}
+
+// CVEPath returns the per-record unified path for a CVE-ID under outDir,
+// matching the routing Write applies. (_, false) means the ID is not a
+// CVE-YYYY-NNNN that Stage 3 routes to cve/<year>/. Annotator and debug
+// tools use this so the year-bucket policy stays defined in one place.
+func CVEPath(outDir, cveID string) (string, bool) {
+	m := cveIDPattern.FindStringSubmatch(cveID)
+	if m == nil {
+		return "", false
+	}
+	return filepath.Join(outDir, cveBucket, m[1], cveID+".json"), true
 }
 
 // Write serializes one record to its bucket-derived path under outDir.

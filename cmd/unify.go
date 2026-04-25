@@ -69,15 +69,9 @@ func newUnifyCmd() *cobra.Command {
 			// Reset the unified/ tree once, up front. Done outside the
 			// fan-out so workers can MkdirAll bucket dirs without
 			// racing with a background delete.
-			outDir, err := writer.Init(root)
+			outDir, err := writer.Reset(root)
 			if err != nil {
-				return fmt.Errorf("writer.Init: %w", err)
-			}
-			if err := os.RemoveAll(outDir); err != nil {
-				return fmt.Errorf("clear %s: %w", outDir, err)
-			}
-			if err := os.MkdirAll(outDir, 0o750); err != nil {
-				return fmt.Errorf("recreate %s: %w", outDir, err)
+				return err
 			}
 
 			// Stages 2+3 fused: merge → write per PrimaryID. Memory

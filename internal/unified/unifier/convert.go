@@ -9,11 +9,11 @@ import (
 )
 
 // SourceTag is the "<kind>.<source>" string used by mergeSeverities to
-// look up priorityRank. Exposed so the debug command can build it from
+// look up PriorityRank. Exposed so the debug command can build it from
 // IndexEntry without re-implementing the format.
 func SourceTag(kind unified.SourceKind, source string) string {
 	if kind == unified.SourceCVE {
-		return "cve.mitre"
+		return cveSourceTag
 	}
 	return string(kind) + "." + source
 }
@@ -76,7 +76,7 @@ func CVEMetrics(in []cve.Metric, from unified.Provenance) []severityItem {
 				Score:  formatScore(c.BaseScore),
 				From:   from,
 			},
-			source: "cve.mitre",
+			source: cveSourceTag,
 		})
 	}
 	for _, m := range in {
@@ -126,7 +126,7 @@ func CVEDescriptions(in []cve.Description, from unified.Provenance) []descriptio
 	for _, d := range in {
 		out = append(out, descriptionItem{
 			Description: unified.Description{Lang: d.Lang, Text: d.Value, From: from},
-			source:      "cve.mitre",
+			source:      cveSourceTag,
 		})
 	}
 	return out
@@ -153,7 +153,7 @@ func CVEAffectedRecords(in []cve.Affected, from unified.Provenance) []affectedIt
 		aff := in[i]
 		out = append(out, affectedItem{
 			record: unified.AffectedRecord{From: from, CVE: &aff},
-			source: "cve.mitre",
+			source: cveSourceTag,
 		})
 	}
 	return out

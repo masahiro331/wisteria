@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/masahiro331/wisteria/internal/unified/annotator"
+	"github.com/masahiro331/wisteria/internal/unified/writer"
 	"github.com/masahiro331/wisteria/internal/x/cachedir"
 )
 
@@ -31,7 +32,10 @@ func newAnnotateCmd() *cobra.Command {
 				return err
 			}
 			sourcesRoot := filepath.Join(root, cachedir.SourcesSubdir)
-			outDir := filepath.Join(root, "unified")
+			outDir, err := writer.OutDir(root)
+			if err != nil {
+				return err
+			}
 			out := cmd.OutOrStdout()
 			ctx := cmd.Context()
 
