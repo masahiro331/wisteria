@@ -519,32 +519,29 @@ internal/unified/testdata/
 - AlmaLinux など distro 系 OSV は aliases フィールド自体を持たないものが多い (例: ALBA-2019:0973)
 - CVE5 ファイル: `cveMetadata.cveId` に CVE-ID、`containers.cna.descriptions[]` に説明、`containers.cna.affected[]` に影響範囲
 
-## 13. PR 分割
+## 13. 実装タスク
 
-1. **PR 1 (preparation)**: fetcher の出力先を `<cache-dir>/sources/{osv,cve}/...` に変更
-2. **PR 1.5 (KEV fetcher)**: `internal/fetcher/kev` 追加 + `wisteria fetch kev` / `fetch all` 統合
-3. **PR 1.6 (EPSS fetcher)**: `internal/fetcher/epss` 追加 + `wisteria fetch epss` / `fetch all` 統合 (本 PR)。download 時に gzip 展開して plain CSV を保存
-4. **PR 2 (schema)**: `internal/unified/{osv,cve,kev,epss}` schema 型 + unmarshal テスト
-5. **PR 3 (walker + PrimaryID)**: `internal/unified/walker` + PrimaryID 決定ロジック (§3.1)
-6. **PR 4 (debug 骨格)**: `cmd/debug/` の親コマンド + `debug index` (PR 5/6 のマージルール検証を実データで回せるよう先に刺す)
-7. **PR 5 (unifier core)**: 中核型 + References / Severities の merge + `debug unify` 最初の出力
-8. **PR 6 (unifier rest)**: Descriptions / Affected の並列保持 + `debug unify` 完成形
-9. **PR 7 (inspect + debug fields)**: `internal/unified/inspect` + `wisteria debug fields`
-10. **PR 8 (production wiring)**: `internal/unified/writer` + `cmd/unify.go` (Stage 1-3)
-11. **PR 9 (KEV annotator)**: `internal/unified/annotator.AnnotateKEV` (Stage 4 前半) + `cmd/unify.go` への配線 + `wisteria debug annotate`
-12. **PR 10 (EPSS annotator)**: `internal/unified/annotator.AnnotateEPSS` (Stage 4 後半) + `cmd/unify.go` への追加配線
+実装は GitHub Issues で管理する。本セクションは作業分割表 (本ファイルではない) として Milestone [Phase 1: Unified Advisory](https://github.com/masahiro331/wisteria/milestone/1) を参照する。Issue 一覧:
 
-各 PR は branch-per-feature 方針に従う。
+- [#13 unified: define OSV / CVE5 / KEV / EPSS schema types](https://github.com/masahiro331/wisteria/issues/13)
+- [#14 unified/walker: implement Stage 1 walker + PrimaryID resolution](https://github.com/masahiro331/wisteria/issues/14)
+- [#15 cmd/debug: skeleton command + 'debug index' subcommand](https://github.com/masahiro331/wisteria/issues/15)
+- [#16 unified/unifier: core merge (References + Severities) + 'debug unify'](https://github.com/masahiro331/wisteria/issues/16)
+- [#17 unified/unifier: parallel-hold merge (Descriptions + Affected)](https://github.com/masahiro331/wisteria/issues/17)
+- [#18 unified/inspect + 'debug fields'](https://github.com/masahiro331/wisteria/issues/18)
+- [#19 unified/writer + cmd/unify (Stage 1-3 production wiring)](https://github.com/masahiro331/wisteria/issues/19)
+- [#20 unified/annotator: AnnotateKEV (Stage 4 KEV)](https://github.com/masahiro331/wisteria/issues/20)
+- [#21 unified/annotator: AnnotateEPSS (Stage 4 EPSS)](https://github.com/masahiro331/wisteria/issues/21)
+
+各 Issue は branch-per-feature で 1 PR にする。PR description には `Closes #N` を入れる。
 
 ## 14. 未決定事項
 
-実装中に判断が必要な未決事項。該当 PR で決定し、本ファイルに反映してから本セクションから削除する。
+設計判断のうち実データを見てから決める項目は GitHub Issues (label `kind/open-question`) で管理する:
 
-- **§8.1 優先度配列の最終メンバー** (PR 5 で確定): 現在の配列はドラフト。`wisteria debug fields` で実データを観察し、出現する全 ecosystem を網羅した上で順序を確定する。
-- **マージルール (§8) の実データ検証** (PR 5/6): References の URL 正規化、Severity dedup key、Description / Affected の並び順を `wisteria debug unify --sample` で実データに当てて妥当性を確認する。想定外パターンが出たら本ファイルを更新する。
-- **出力フォーマット**: 1 PrimaryID = 1 JSON ファイルで決定。Phase 3 の bulk load で NDJSON が必要になったら別途検討。
-- **CLI コマンド名**: `wisteria unify` で決定。ただし PR 8 着手時に `build` / `aggregate` / `merge` のほうが自然と感じたら再考する。
-- **並行性**: 初版は直列実装で決定。PR 8 で全データ処理時間を計測し、許容できないなら `errgroup` + 上限付き並列を後付けする。fetcher と同じ pattern を流用する。
-- **Inspect API シグネチャ** (PR 7): `FieldStats` / `Sample` の引数・戻り値は debug コマンドの要求に合わせて確定する。
-- **ファイル名エスケープ規則** (PR 8): `:` を `_` に置換する暫定方針。standalone advisory に `:` 以外の危険文字 (`/`, `\`, NUL) が含まれる ID が出現したら拡張する。元 ID は JSON 本体の `primary_id` に保持するので往復可能。
-- **シグナル単独 CVE-ID の扱い** (将来拡張): 初期実装 (PR 9 / PR 10) は skip + log で確定 (§5.2 / §9 Stage 4)。KEV / EPSS カタログには載っているが OSV / CVE5 のいずれにも観測されていない CVE-ID については、シグナルだけの最小 UnifiedAdvisory を生成するかどうかが将来の拡張ポイント。EPSS は ~30万件と件数が多いため、実データで「unified に無い CVE-ID 件数」を確認した後、必要なら別 PR で対応する。
+- [#22 Decide vendor priority array final members (§8.1)](https://github.com/masahiro331/wisteria/issues/22)
+- [#23 Validate merge rules against real data (§8)](https://github.com/masahiro331/wisteria/issues/23)
+- [#24 Decide whether to generate signal-only UnifiedAdvisory for KEV/EPSS-only CVE-IDs](https://github.com/masahiro331/wisteria/issues/24)
+- [#25 Decide whether to add concurrency to Stage 1-3](https://github.com/masahiro331/wisteria/issues/25)
+
+決定が出た時点で対応する設計書セクションを本ファイルに反映し、Issue を閉じる。

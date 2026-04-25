@@ -45,6 +45,23 @@ Fetchers expose `WithBaseURL` (osv) / `WithArchiveURL` (cve) / `WithCatalogURL` 
 - Branch-per-feature PRs: do not commit directly to `main`. For each functional unit of work, create a dedicated branch and open a PR.
 - No Claude attribution in git or GitHub artifacts: commit messages, PR titles, and PR bodies must not include `Co-Authored-By: Claude ...`, `🤖 Generated with [Claude Code]`, or any other Claude/Anthropic signature line. Enforced by the `commit-lint` workflow.
 
+## Issue-driven workflow
+
+Tasks live in **GitHub Issues**, not in design docs. Design docs in `docs/design/` describe decided design only — pipeline shape, types, merge rules, stage I/F. PR plans, deferred work, and open questions belong in Issues.
+
+- Before starting any non-trivial unit of work, confirm there is an Issue for it. If not, propose one to the user (title + 1-2 line description) and create it via `gh issue create` only after approval.
+- Each branch + PR resolves one Issue. PR description must include `Closes #N` so the Issue auto-closes on merge.
+- Codex review findings that are not merge blockers should be filed as follow-up Issues (label `kind/codex-finding`) rather than left in commit messages or PR comments.
+- Do not modify Issues, labels, milestones, or other shared GitHub state without explicit user approval per the "Executing actions with care" rules.
+
+Labels in use:
+
+- `phase/1-unified-advisory`, `phase/2-ai`, `phase/3-postgres` — which roadmap phase the work belongs to
+- `kind/feature`, `kind/refactor`, `kind/open-question`, `kind/codex-finding` — what kind of work it is
+- `priority/blocker`, `priority/normal` — for the rare blocker; default is `normal` (no label)
+
+Milestone `Phase 1: Unified Advisory` bundles the entire Stage 1-4 implementation.
+
 ## Codex review
 
 Use Codex as a second-opinion reviewer at two trigger points:
