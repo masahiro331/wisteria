@@ -5,21 +5,30 @@
 //   - PrimaryID == CVE-YYYY-NNNN  →  cve/<YYYY>/<PrimaryID>.json
 //   - else                        →  standalone/<ecosystem>/<PrimaryID>.json
 //
-// The package exposes two functions and no state:
+// Public API:
 //
-//   - Init(cacheDir)                – guard the deletion target, return outDir.
-//     Caller (cmd/unify) is responsible for
-//     RemoveAll + MkdirAll on outDir before
-//     calling Write.
-//   - Write(outDir, rec)            – marshal one record + temp + rename.
-//     Safe for concurrent use; bucket dirs
-//     are MkdirAll'd lazily and cached so
-//     N records into the same year/eco
-//     bucket trigger one mkdir, not N.
+//   - OutDir(cacheDir)    – derive the unified output path; no I/O.
+//     Used by read-only callers (annotator, debug
+//     tools) that just need the path.
+//   - Init(cacheDir)      – validate the destination + clear the bucket
+//     mkdir cache; returns outDir without touching
+//     the tree. Caller is then responsible for
+//     RemoveAll + MkdirAll before streaming Write.
+//   - Reset(cacheDir)     – Init + RemoveAll + MkdirAll in one call;
+//     the entrypoint cmd/unify uses to start a
+//     fresh write fan-out.
+//   - Write(outDir, rec)  – marshal one record + temp + rename. Safe for
+//     concurrent use; bucket dirs are MkdirAll'd
+//     lazily and cached (package-level sync.Map,
+//     reset on every Init/Reset) so N records into
+//     the same year/eco bucket trigger one mkdir.
+//   - CVEPath(outDir, id) – resolve the per-record path for one CVE-ID,
+//     used by Stage 4 (annotator) so the year-bucket
+//     routing stays defined here.
 //
-// Splitting Init from Write lets the production driver stream merge
-// output straight to disk (one record per goroutine) instead of holding
-// the entire []UnifiedAdvisory in memory.
+// Splitting Init/Reset from Write lets the production driver stream
+// merge output straight to disk (one record per goroutine) instead of
+// holding the entire []UnifiedAdvisory in memory.
 package writer
 
 import (
@@ -184,18 +193,18 @@ func ensureDir(dir string) error {
 }
 
 // bucketPath returns the directory + filename for one record. CVE-IDs go
-// to cve/<year>/; everything else goes to standalone/<ecosystem>/, where
+// to cve/<year>/ (delegated to CVEPath so the routing rule lives in one
+// place); everything else goes to standalone/<ecosystem>/, where
 // ecosystem comes from the highest-priority OSV provenance.
 func bucketPath(outDir string, rec unified.UnifiedAdvisory) (dir, file string, err error) {
-	safeName := escapeFilename(rec.PrimaryID) + ".json"
-	if m := cveIDPattern.FindStringSubmatch(rec.PrimaryID); m != nil {
-		return filepath.Join(outDir, cveBucket, m[1]), safeName, nil
+	if path, ok := CVEPath(outDir, rec.PrimaryID); ok {
+		return filepath.Dir(path), filepath.Base(path), nil
 	}
 	eco, err := primaryEcosystem(rec.Provenances)
 	if err != nil {
 		return "", "", fmt.Errorf("writer: %s: %w", rec.PrimaryID, err)
 	}
-	return filepath.Join(outDir, standaloneBucket, eco), safeName, nil
+	return filepath.Join(outDir, standaloneBucket, eco), escapeFilename(rec.PrimaryID) + ".json", nil
 }
 
 // primaryEcosystem picks the OSV provenance with the lowest PriorityRank.
