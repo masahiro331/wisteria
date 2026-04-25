@@ -12,14 +12,18 @@ import (
 	"path/filepath"
 	"strings"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/masahiro331/wisteria/internal/cache"
+	"github.com/masahiro331/wisteria/internal/progress"
 )
 
 const (
-	sourceName     = "osv"
-	defaultBaseURL = "https://osv-vulnerabilities.storage.googleapis.com"
-	ecosystemsPath = "ecosystems.txt"
-	archiveName    = "all.zip"
+	sourceName         = "osv"
+	defaultBaseURL     = "https://osv-vulnerabilities.storage.googleapis.com"
+	ecosystemsPath     = "ecosystems.txt"
+	archiveName        = "all.zip"
+	defaultConcurrency = 4
 )
 
 // Option configures a Fetcher.
@@ -34,16 +38,35 @@ func WithHTTPClient(c *http.Client) Option { return func(f *Fetcher) { f.client 
 // WithCacheDir overrides the cache root used to store downloads.
 func WithCacheDir(dir string) Option { return func(f *Fetcher) { f.cacheDir = dir } }
 
+// WithProgress attaches a progress tracker. A nil tracker disables progress UI.
+func WithProgress(t *progress.Tracker) Option { return func(f *Fetcher) { f.progress = t } }
+
+// WithConcurrency caps the number of ecosystems downloaded in parallel.
+// Values <= 0 fall back to the default.
+func WithConcurrency(n int) Option {
+	return func(f *Fetcher) {
+		if n > 0 {
+			f.concurrency = n
+		}
+	}
+}
+
 // Fetcher downloads OSV per-ecosystem archives.
 type Fetcher struct {
-	baseURL  string
-	client   *http.Client
-	cacheDir string
+	baseURL     string
+	client      *http.Client
+	cacheDir    string
+	progress    *progress.Tracker
+	concurrency int
 }
 
 // New constructs a Fetcher with optional overrides.
 func New(opts ...Option) *Fetcher {
-	f := &Fetcher{baseURL: defaultBaseURL, client: http.DefaultClient}
+	f := &Fetcher{
+		baseURL:     defaultBaseURL,
+		client:      http.DefaultClient,
+		concurrency: defaultConcurrency,
+	}
 	for _, opt := range opts {
 		opt(f)
 	}
@@ -66,23 +89,33 @@ func (f *Fetcher) Fetch(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("list ecosystems: %w", err)
 	}
 
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(f.concurrency)
 	for _, eco := range ecosystems {
-		if err := f.downloadEcosystem(ctx, dir, eco); err != nil {
-			return "", fmt.Errorf("download %s: %w", eco, err)
-		}
+		eco := eco
+		g.Go(func() error {
+			if err := f.downloadEcosystem(gctx, dir, eco); err != nil {
+				return fmt.Errorf("download %s: %w", eco, err)
+			}
+			return nil
+		})
 	}
+	if err := g.Wait(); err != nil {
+		return "", err
+	}
+	f.progress.Wait()
 	return dir, nil
 }
 
 func (f *Fetcher) listEcosystems(ctx context.Context) ([]string, error) {
-	body, err := f.get(ctx, ecosystemsPath)
+	resp, err := f.get(ctx, ecosystemsPath)
 	if err != nil {
 		return nil, err
 	}
-	defer body.Close()
+	defer resp.Body.Close()
 
 	var out []string
-	scanner := bufio.NewScanner(body)
+	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
@@ -97,11 +130,11 @@ func (f *Fetcher) listEcosystems(ctx context.Context) ([]string, error) {
 }
 
 func (f *Fetcher) downloadEcosystem(ctx context.Context, root, ecosystem string) error {
-	body, err := f.get(ctx, ecosystem+"/"+archiveName)
+	resp, err := f.get(ctx, ecosystem+"/"+archiveName)
 	if err != nil {
 		return err
 	}
-	defer body.Close()
+	defer resp.Body.Close()
 
 	dir := filepath.Join(root, ecosystem)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -113,13 +146,16 @@ func (f *Fetcher) downloadEcosystem(ctx context.Context, root, ecosystem string)
 		return err
 	}
 	defer out.Close()
+
+	body := f.progress.Bar(ecosystem, resp.ContentLength).ProxyReader(resp.Body)
+	defer body.Close()
 	if _, err := io.Copy(out, body); err != nil {
 		return fmt.Errorf("write %s: %w", dest, err)
 	}
 	return nil
 }
 
-func (f *Fetcher) get(ctx context.Context, path string) (io.ReadCloser, error) {
+func (f *Fetcher) get(ctx context.Context, path string) (*http.Response, error) {
 	u, err := url.JoinPath(f.baseURL, path)
 	if err != nil {
 		return nil, err
@@ -136,5 +172,5 @@ func (f *Fetcher) get(ctx context.Context, path string) (io.ReadCloser, error) {
 		resp.Body.Close()
 		return nil, fmt.Errorf("GET %s: status %d", u, resp.StatusCode)
 	}
-	return resp.Body, nil
+	return resp, nil
 }

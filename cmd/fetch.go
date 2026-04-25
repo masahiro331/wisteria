@@ -2,19 +2,47 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/spf13/cobra"
 
 	"github.com/masahiro331/wisteria/internal/fetcher"
 	"github.com/masahiro331/wisteria/internal/fetcher/cve"
 	"github.com/masahiro331/wisteria/internal/fetcher/osv"
+	"github.com/masahiro331/wisteria/internal/progress"
 )
 
-// fetcherFactory builds a Fetcher with the resolved cache directory applied.
-type fetcherFactory func(cacheDir string) fetcher.Fetcher
+// fetchOptions bundles common per-invocation knobs read from CLI flags.
+type fetchOptions struct {
+	cacheDir    string
+	concurrency int
+	tracker     *progress.Tracker
+}
 
-func osvFactory(cacheDir string) fetcher.Fetcher { return osv.New(osv.WithCacheDir(cacheDir)) }
-func cveFactory(cacheDir string) fetcher.Fetcher { return cve.New(cve.WithCacheDir(cacheDir)) }
+// fetcherFactory builds a Fetcher with the resolved options applied.
+type fetcherFactory func(opts fetchOptions) fetcher.Fetcher
+
+func osvFactory(opts fetchOptions) fetcher.Fetcher {
+	return osv.New(
+		osv.WithCacheDir(opts.cacheDir),
+		osv.WithProgress(opts.tracker),
+		osv.WithConcurrency(opts.concurrency),
+	)
+}
+
+func cveFactory(opts fetchOptions) fetcher.Fetcher {
+	return cve.New(cve.WithCacheDir(opts.cacheDir), cve.WithProgress(opts.tracker))
+}
+
+func optionsFromCmd(cmd *cobra.Command) fetchOptions {
+	cacheDir, _ := cmd.Flags().GetString(cacheDirFlag)
+	concurrency, _ := cmd.Flags().GetInt(concurrencyFlag)
+	return fetchOptions{
+		cacheDir:    cacheDir,
+		concurrency: concurrency,
+		tracker:     newTracker(cmd.ErrOrStderr()),
+	}
+}
 
 func newFetchCmd() *cobra.Command {
 	c := &cobra.Command{
@@ -29,13 +57,21 @@ func newFetchCmd() *cobra.Command {
 	return c
 }
 
+// newTracker builds a progress tracker writing to stderr, or returns nil
+// when stderr isn't usable (e.g. piped to a non-writer).
+func newTracker(out io.Writer) *progress.Tracker {
+	if out == nil {
+		return nil
+	}
+	return progress.New(out)
+}
+
 func newFetchSourceCmd(use, short string, factory fetcherFactory) *cobra.Command {
 	return &cobra.Command{
 		Use:   use,
 		Short: short,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cacheDir, _ := cmd.Flags().GetString(cacheDirFlag)
-			f := factory(cacheDir)
+			f := factory(optionsFromCmd(cmd))
 			dir, err := f.Fetch(cmd.Context())
 			if err != nil {
 				return err
@@ -51,10 +87,9 @@ func newFetchAllCmd() *cobra.Command {
 		Use:   "all",
 		Short: "Fetch every supported source",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cacheDir, _ := cmd.Flags().GetString(cacheDirFlag)
 			factories := []fetcherFactory{osvFactory, cveFactory}
 			for _, factory := range factories {
-				f := factory(cacheDir)
+				f := factory(optionsFromCmd(cmd))
 				dir, err := f.Fetch(cmd.Context())
 				if err != nil {
 					return fmt.Errorf("%s: %w", f.Name(), err)
