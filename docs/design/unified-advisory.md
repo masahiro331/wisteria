@@ -247,7 +247,13 @@ type UnifiedAdvisory struct {
 }
 ```
 
-OSV / CVE / KEV の struct は **upstream の全フィールドを typed field として明示する** (1 byte も落とさない方針)。`json.RawMessage` の catch-all は使わない。upstream schema に新フィールドが入った場合は struct を追加して対応する。検証は `tmp/check` (typed parse → re-marshal を interface{} parse → re-marshal と diff) を都度回し、漏れがゼロであることを確認する。
+OSV / CVE / KEV の struct は **upstream の全フィールドを typed field として明示する** (1 byte も落とさない方針)。`json.RawMessage` の catch-all は使わない。upstream schema に新フィールドが入った場合は struct を追加して対応する。検証は `debug/schema-coverage` (typed parse → re-marshal を interface{} parse → re-marshal と diff、upstream の `null` / `[]` / `{}` / Go zero time string は absent と等価扱い、最大 3 件のサンプル file path を表示) を都度回し、漏れがゼロであることを確認する。
+
+例外として、以下のフィールドは upstream で構造が一定でないため `json.RawMessage` 維持を許容する。新規追加時は本リスト + 該当 schema 定義のコメントに理由を記録する:
+
+- `cve.Container.Source` (`containers.{cna,adp}[].source`): CVE5 spec が `additionalProperties` 相当で free-form。実データでも `{"discovery": "INTERNAL"}` 系と `{"lang": "en", "value": "Reporter Name"}` 系が混在し、安定した typed shape を引けない
+- `cve.Container.XGenerator` / `XLegacyV4Record` / `XAffectedList` / `XRedhatCweChain` / `XConverterErrors`: upstream `x_*` 拡張で publisher 固有
+- `cve.MetricOther.Content`: SSVC など metric ごとに任意 schema
 
 EPSS は CSV 固定 3 列 (`cve, epss, percentile`) で構造が決まりきっているため typed のみ。
 
