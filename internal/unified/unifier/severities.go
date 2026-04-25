@@ -42,7 +42,7 @@ func mergeSeverities(in []severityItem) []unified.Severity {
 	buckets := make(map[key]*bucket)
 	for _, item := range in {
 		k := makeKey(item.Severity)
-		r := priorityRank(item.source)
+		r := PriorityRank(item.source)
 		if b, ok := buckets[k]; !ok || r < b.rank {
 			buckets[k] = &bucket{item: item, rank: r}
 		}
@@ -58,7 +58,7 @@ func mergeSeverities(in []severityItem) []unified.Severity {
 	// emitting both cvssV3_0 and cvssV3_1, or two unranked OSV
 	// ecosystems with the same Type).
 	sort.SliceStable(out, func(i, j int) bool {
-		ri, rj := priorityRank(out[i].source), priorityRank(out[j].source)
+		ri, rj := PriorityRank(out[i].source), PriorityRank(out[j].source)
 		if ri != rj {
 			return ri < rj
 		}

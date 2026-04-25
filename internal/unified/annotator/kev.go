@@ -20,20 +20,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 
 	"github.com/masahiro331/wisteria/internal/unified"
 	"github.com/masahiro331/wisteria/internal/unified/kev"
+	"github.com/masahiro331/wisteria/internal/unified/writer"
 )
 
-const (
-	kevCatalogRelPath = "kev/known_exploited_vulnerabilities.json"
-	cveBucket         = "cve"
-)
-
-// cveIDPattern matches the CVE-ID shape Stage 3 routes to cve/<year>/.
-// The capture group exposes the year for path resolution.
-var cveIDPattern = regexp.MustCompile(`^CVE-(\d{4})-\d+$`)
+const kevCatalogRelPath = "kev/known_exploited_vulnerabilities.json"
 
 // AnnotateKEV reads <sourcesRoot>/kev/known_exploited_vulnerabilities.json
 // and, for every entry whose CVE-ID has a matching unified file under
@@ -67,7 +60,7 @@ func AnnotateKEV(ctx context.Context, sourcesRoot, outDir string) error {
 // when present, merges the KEV record into it. Missing target is a
 // silent skip — see package doc.
 func applyKEVEntry(outDir, catalogRelPath string, v kev.Vulnerability) error {
-	path, ok := unifiedCVEPath(outDir, v.CVEID)
+	path, ok := writer.CVEPath(outDir, v.CVEID)
 	if !ok {
 		return nil
 	}
@@ -80,50 +73,6 @@ func applyKEVEntry(outDir, catalogRelPath string, v kev.Vulnerability) error {
 	}
 	rec.KEV = kevRecord(catalogRelPath, v)
 	return writeUnified(path, rec)
-}
-
-// unifiedCVEPath returns the per-record path for a CVE-ID. Returns
-// (_, false) when the ID does not match the CVE-YYYY-NNNN shape that
-// Stage 3 routes to cve/<year>/; KEV / EPSS only key by CVE-ID, so a
-// non-CVE input means "no target", not an error.
-func unifiedCVEPath(outDir, cveID string) (string, bool) {
-	m := cveIDPattern.FindStringSubmatch(cveID)
-	if m == nil {
-		return "", false
-	}
-	return filepath.Join(outDir, cveBucket, m[1], cveID+".json"), true
-}
-
-// readUnified loads one Stage 3 file. (_, false, nil) means the file is
-// absent — the caller skips. Any other I/O or decode error is returned.
-func readUnified(path string) (unified.UnifiedAdvisory, bool, error) {
-	body, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return unified.UnifiedAdvisory{}, false, nil
-	}
-	if err != nil {
-		return unified.UnifiedAdvisory{}, false, fmt.Errorf("annotator: read %s: %w", path, err)
-	}
-	var rec unified.UnifiedAdvisory
-	if err := json.Unmarshal(body, &rec); err != nil {
-		return unified.UnifiedAdvisory{}, false, fmt.Errorf("annotator: decode %s: %w", path, err)
-	}
-	return rec, true, nil
-}
-
-// writeUnified rewrites a Stage 3 file in place. Plain os.WriteFile —
-// not atomic — because Stage 4 always runs as part of `wisteria unify`
-// after Stage 3, so a crashed mid-write file is rebuilt on the next
-// pipeline run from upstream sources (which the user keeps under git).
-func writeUnified(path string, rec unified.UnifiedAdvisory) error {
-	body, err := json.MarshalIndent(rec, "", "  ")
-	if err != nil {
-		return fmt.Errorf("annotator: marshal %s: %w", path, err)
-	}
-	if err := os.WriteFile(path, body, 0o600); err != nil {
-		return fmt.Errorf("annotator: write %s: %w", path, err)
-	}
-	return nil
 }
 
 // kevRecord copies the upstream KEV vulnerability into the unified shape.

@@ -28,7 +28,7 @@ func mergeDescriptions(in []descriptionItem) []unified.Description {
 	}
 	sort.SliceStable(indices, func(a, b int) bool {
 		ia, ib := indices[a], indices[b]
-		ra, rb := priorityRank(in[ia].source), priorityRank(in[ib].source)
+		ra, rb := PriorityRank(in[ia].source), PriorityRank(in[ib].source)
 		if ra != rb {
 			return ra < rb
 		}

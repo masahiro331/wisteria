@@ -12,6 +12,7 @@ import (
 
 	"github.com/masahiro331/wisteria/internal/unified"
 	"github.com/masahiro331/wisteria/internal/unified/epss"
+	"github.com/masahiro331/wisteria/internal/unified/writer"
 )
 
 const epssCatalogRelPath = "epss/epss_scores-current.csv"
@@ -56,7 +57,7 @@ func AnnotateEPSS(ctx context.Context, sourcesRoot, outDir string) error {
 // applyEPSSScore resolves the unified file for one EPSS score and, when
 // present, merges the score into it. Missing target is a silent skip.
 func applyEPSSScore(outDir, modelVersion, scoreDate string, s epss.Score) error {
-	path, ok := unifiedCVEPath(outDir, s.CVE)
+	path, ok := writer.CVEPath(outDir, s.CVE)
 	if !ok {
 		return nil
 	}
