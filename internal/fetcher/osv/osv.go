@@ -15,6 +15,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/masahiro331/wisteria/internal/cache"
+	"github.com/masahiro331/wisteria/internal/extract"
 	"github.com/masahiro331/wisteria/internal/progress"
 )
 
@@ -141,13 +142,25 @@ func (f *Fetcher) downloadEcosystem(ctx context.Context, root, ecosystem string)
 		return err
 	}
 	dest := filepath.Join(dir, archiveName)
+	if err := writeArchive(dest, resp, f.progress.Bar(ecosystem, resp.ContentLength)); err != nil {
+		return err
+	}
+	if err := extract.Zip(dest, dir); err != nil {
+		return fmt.Errorf("extract %s: %w", dest, err)
+	}
+	if err := os.Remove(dest); err != nil {
+		return fmt.Errorf("remove archive %s: %w", dest, err)
+	}
+	return nil
+}
+
+func writeArchive(dest string, resp *http.Response, bar *progress.Bar) error {
 	out, err := os.Create(dest)
 	if err != nil {
 		return err
 	}
 	defer out.Close()
-
-	body := f.progress.Bar(ecosystem, resp.ContentLength).ProxyReader(resp.Body)
+	body := bar.ProxyReader(resp.Body)
 	defer body.Close()
 	if _, err := io.Copy(out, body); err != nil {
 		return fmt.Errorf("write %s: %w", dest, err)
