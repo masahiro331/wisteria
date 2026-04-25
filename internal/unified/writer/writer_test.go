@@ -88,6 +88,34 @@ func TestWrite_StandaloneBucketUsesPriorityProvenance(t *testing.T) {
 	}
 }
 
+// TestWrite_StandaloneNormalizesEcosystemSpaces guards a subtle path
+// drift: walker stores Source as "Red_Hat" (space → "_") but the OSV
+// provenance Path keeps the on-disk "Red Hat". The writer derives the
+// bucket from Path, so it must apply the same normalization before
+// looking up priority — otherwise "osv.Red Hat" misses the priority
+// table and Red Hat loses to a lower-priority OSV.
+func TestWrite_StandaloneNormalizesEcosystemSpaces(t *testing.T) {
+	cacheDir := t.TempDir()
+	outDir := initOutDir(t, cacheDir)
+
+	rec := unified.UnifiedAdvisory{
+		PrimaryID: "RHSA-2024-1",
+		Provenances: []unified.Provenance{
+			// PyPI is unranked? — actually present in the priority list,
+			// but lower than Red Hat. The test asserts Red_Hat wins.
+			{Kind: unified.SourceOSV, Path: "osv/PyPI/x.json", ID: "PYSEC-X"},
+			{Kind: unified.SourceOSV, Path: "osv/Red Hat/RHSA-2024-1.json", ID: "RHSA-2024-1"},
+		},
+	}
+	if err := writer.Write(outDir, rec); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	want := filepath.Join(cacheDir, "unified", "standalone", "Red_Hat", "RHSA-2024-1.json")
+	if _, err := os.Stat(want); err != nil {
+		t.Errorf("expected %s, stat err = %v", want, err)
+	}
+}
+
 func TestWrite_StandalonePicksHighestPriorityEcosystem(t *testing.T) {
 	cacheDir := t.TempDir()
 	outDir := initOutDir(t, cacheDir)
@@ -217,6 +245,23 @@ func TestWrite_StandaloneWithoutOSVProvenanceErrors(t *testing.T) {
 	}
 	if err := writer.Write(outDir, rec); err == nil {
 		t.Fatal("expected error: standalone advisory needs an OSV provenance")
+	}
+}
+
+// TestInit_ResetsBucketCacheAcrossRuns guards against a stale-cache bug:
+// the package keeps a sync.Map of bucket dirs it has already MkdirAll'd
+// to avoid 100k+ syscalls per run. If two runs reuse the same cacheDir
+// in one process (tests, long-lived daemons), the second run's caller
+// removes outDir, but a leftover cache hit would skip the MkdirAll and
+// CreateTemp would then fail on a missing parent. Init must reset.
+func TestInit_ResetsBucketCacheAcrossRuns(t *testing.T) {
+	cacheDir := t.TempDir()
+
+	for i := range 2 {
+		outDir := initOutDir(t, cacheDir)
+		if err := writer.Write(outDir, cveAdvisory("CVE-2024-0001", "")); err != nil {
+			t.Fatalf("run %d Write: %v", i, err)
+		}
 	}
 }
 
