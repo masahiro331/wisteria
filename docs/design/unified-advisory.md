@@ -318,7 +318,7 @@ KEV / EPSS はベンダー / advisory ではなく exploit シグナルなので
   - 第一 key: `(Type, Vector)` (Vector が空でないとき)
   - フォールバック key: `(Type, Score)` (Vector が無い古い CVSS など)
 - 同じ key で複数 source 由来のものを 1 件に寄せる場合、最優先 source の Provenance を残す
-- 並び順: 優先度配列順 → Type 順
+- 並び順: 優先度配列順 → Type → Vector → Score。末尾 2 項は決定的な tie-breaker (1 つの CVE5 ファイルが `cvssV3_0` と `cvssV3_1` を両方持つケースなど、source rank と Type が一致する複数残存エントリがあっても出力順が再現可能になるように)
 
 ### 8.5 Affected
 

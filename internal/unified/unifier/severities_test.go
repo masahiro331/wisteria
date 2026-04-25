@@ -94,6 +94,36 @@ func TestMergeSeverities(t *testing.T) {
 				{Type: "CVSS_V3", Score: "9.8", From: provAlma},
 			},
 		},
+		{
+			// Reproducer for the round-2 Codex finding: when source rank
+			// and Type tie (one CVE5 file emitting both cvssV3_0 and
+			// cvssV3_1), the comparator must still pick a stable order
+			// so the JSON output is reproducible across runs.
+			name: "same source+Type with different Vectors sorts by Vector",
+			in: []unified.Severity{
+				{Type: "CVSS_V3", Vector: "CVSS:3.1/AV:N", Score: "9.8", From: provCVE},
+				{Type: "CVSS_V3", Vector: "CVSS:3.0/AV:N", Score: "9.8", From: provCVE},
+			},
+			sources: []string{"cve.mitre", "cve.mitre"},
+			want: []unified.Severity{
+				{Type: "CVSS_V3", Vector: "CVSS:3.0/AV:N", Score: "9.8", From: provCVE},
+				{Type: "CVSS_V3", Vector: "CVSS:3.1/AV:N", Score: "9.8", From: provCVE},
+			},
+		},
+		{
+			// Same source rank (both unranked) and same Type with
+			// distinct (Vector,Score). Score is the final tie-breaker.
+			name: "same Type no Vector falls back to Score for ordering",
+			in: []unified.Severity{
+				{Type: "CVSS_V2", Score: "9.0", From: provAlma},
+				{Type: "CVSS_V2", Score: "7.5", From: provAlma},
+			},
+			sources: []string{"osv.AlmaLinux", "osv.AlmaLinux"},
+			want: []unified.Severity{
+				{Type: "CVSS_V2", Score: "7.5", From: provAlma},
+				{Type: "CVSS_V2", Score: "9.0", From: provAlma},
+			},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

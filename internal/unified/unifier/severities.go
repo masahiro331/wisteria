@@ -51,12 +51,24 @@ func mergeSeverities(in []severityItem) []unified.Severity {
 	for _, b := range buckets {
 		out = append(out, b.item)
 	}
+	// Sort key: (source rank, Type, Vector, Score). The (Vector, Score)
+	// tail is the deterministic tie-breaker — without it, two surviving
+	// entries that share rank+Type would land in map iteration order
+	// and the JSON output would vary across runs (e.g. one CVE5 record
+	// emitting both cvssV3_0 and cvssV3_1, or two unranked OSV
+	// ecosystems with the same Type).
 	sort.SliceStable(out, func(i, j int) bool {
 		ri, rj := priorityRank(out[i].source), priorityRank(out[j].source)
 		if ri != rj {
 			return ri < rj
 		}
-		return out[i].Type < out[j].Type
+		if out[i].Type != out[j].Type {
+			return out[i].Type < out[j].Type
+		}
+		if out[i].Vector != out[j].Vector {
+			return out[i].Vector < out[j].Vector
+		}
+		return out[i].Score < out[j].Score
 	})
 	res := make([]unified.Severity, len(out))
 	for i, x := range out {
