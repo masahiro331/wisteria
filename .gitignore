@@ -1,1 +1,8 @@
+# Built binary
 /wisteria
+
+# Local download / scratch directories
+/tmp/
+
+# Meeting notes (local only)
+/docs/meetings/
