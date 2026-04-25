@@ -12,15 +12,24 @@ on:
 
 jobs:
   claude:
+    # Trigger only when @claude is mentioned AND the commenter is the
+    # repo owner. The owner check stops drive-by users from burning the
+    # OAuth quota or pushing arbitrary commits via the bot's write
+    # permissions below.
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      (
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') && github.event.comment.user.login == github.repository_owner) ||
+        (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') && github.event.comment.user.login == github.repository_owner) ||
+        (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') && github.event.review.user.login == github.repository_owner) ||
+        (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) && github.event.issue.user.login == github.repository_owner)
+      )
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      pull-requests: read
+      # write needed so the bot can commit fixes and push them to the PR
+      # branch when asked to address a review finding. Restricted by the
+      # owner-only `if:` above and by the narrow --allowed-tools list.
+      contents: write
+      pull-requests: write
       issues: read
       id-token: write
       actions: read # Required for Claude to read CI results on PRs
@@ -40,10 +49,9 @@ jobs:
           additional_permissions: |
             actions: read
 
-          # Optional: Give a custom prompt to Claude. If this is not specified, Claude will perform the instructions specified in the comment that tagged it.
-          # prompt: 'Update the pull request description to include a summary of changes.'
-
-          # Optional: Add claude_args to customize behavior and configuration
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
-          # claude_args: '--allowed-tools Bash(gh pr *)'
+          # Whitelist the standard local TDD loop (test, fmt, vet, build,
+          # add/commit, push to current PR branch, gh pr commenting) and
+          # keep destructive ops (force push, reset --hard, branch -D)
+          # out of reach. `git push origin HEAD*` matches normal updates
+          # to the current branch but not bare `git push --force`.
+          claude_args: '--allowed-tools "Bash(make *),Bash(go *),Bash(gofmt *),Bash(git status*),Bash(git diff*),Bash(git log*),Bash(git show*),Bash(git add *),Bash(git commit *),Bash(git push origin HEAD*),Bash(gh pr *),Bash(gh issue view*),Bash(gh issue comment*),Edit,Write,Read"'
