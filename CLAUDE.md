@@ -29,9 +29,10 @@ See `docs/meetings/2026-04-25-project-design.md` for the full requirements list 
 - `internal/fetcher/fetcher.go` — defines the `Fetcher` interface (`Name()`, `Fetch(ctx) (dir, error)`). New sources implement this interface so commands can treat them uniformly.
 - `internal/fetcher/osv/` — OSV fetcher; reads `ecosystems.txt` then downloads each `{ecosystem}/all.zip`. Downloads run in parallel via `errgroup` with a configurable cap (`--concurrency`, default 4); the first error cancels in-flight siblings. Each archive is unzipped in place and removed.
 - `internal/fetcher/cve/` — MITRE CVEListV5 fetcher; downloads the repo tarball, extracts it, and removes the tarball.
-- `internal/extract/` — `Zip` and `TarGz` helpers; both reject zip-slip / tar-slip entries.
-- `internal/httpx/` — `DoWithRetry` wraps `http.Client.Do` with exponential backoff + jitter. Retries transport errors and 5xx; 4xx are returned as-is. Default 3 attempts (`--retries`).
-- `internal/cache/` — resolves and creates per-source cache directories. Root precedence: explicit override (`--cache-dir`) → `WISTERIA_CACHE_DIR` env → `os.UserCacheDir()/wisteria`.
+- `internal/fetcher/progress/` — fetcher-side progress UI; thin mpb wrapper used by fetchers and `cmd/fetch`.
+- `internal/x/archive/` — `Zip` and `TarGz` helpers; both reject zip-slip / tar-slip entries.
+- `internal/x/http/` (package `xhttp`) — `DoWithRetry` wraps `http.Client.Do` with exponential backoff + jitter. Retries transport errors and 5xx; 4xx are returned as-is. Default 3 attempts (`--retries`).
+- `internal/x/cachedir/` — resolves and creates per-source cache directories. Root precedence: explicit override (`--cache-dir`) → `WISTERIA_CACHE_DIR` env → `os.UserCacheDir()/wisteria`. Path-resolution only; not a cache layer with eviction.
 
 Fetchers expose `WithBaseURL` / `WithArchiveURL` and `WithHTTPClient` options so tests can inject `httptest.Server`. Tests override `HOME` and `XDG_CACHE_HOME` to redirect cache writes into `t.TempDir()`.
 
