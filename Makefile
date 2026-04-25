@@ -1,4 +1,4 @@
-.PHONY: build test fmt vet tidy clean
+.PHONY: build test fmt vet tidy lint setup clean
 
 BINARY := wisteria
 
@@ -16,6 +16,12 @@ vet:
 
 tidy:
 	go mod tidy
+
+lint:
+	golangci-lint run ./...
+
+setup:
+	./scripts/setup.sh
 
 clean:
 	rm -f $(BINARY)
