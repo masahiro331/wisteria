@@ -251,6 +251,9 @@ OSV / CVE / KEV の struct は **upstream の全フィールドを typed field �
 
 例外として、以下のフィールドは upstream で構造が一定でないため `json.RawMessage` 維持を許容する。新規追加時は本リスト + 該当 schema 定義のコメントに理由を記録する:
 
+- `osv.Record.DatabaseSpecific` (`database_specific`): OSV schema が "free-form JSON object" として明示的に定義する DB 固有 catch-all
+- `osv.Affected.EcosystemSpecific` (`affected[].ecosystem_specific`) / `osv.Affected.DatabaseSpecific` (`affected[].database_specific`): OSV schema が同様に free-form として定義 (ecosystem ごとに任意 schema)
+- `osv.Range.DatabaseSpecific` (`affected[].ranges[].database_specific`): Range レベルでも同じ catch-all を持つ
 - `cve.Container.Source` (`containers.{cna,adp}[].source`): CVE5 spec が `additionalProperties` 相当で free-form。実データでも `{"discovery": "INTERNAL"}` 系と `{"lang": "en", "value": "Reporter Name"}` 系が混在し、安定した typed shape を引けない
 - `cve.Container.XGenerator` / `XLegacyV4Record` / `XAffectedList` / `XRedhatCweChain` / `XConverterErrors`: upstream `x_*` 拡張で publisher 固有
 - `cve.MetricOther.Content`: SSVC など metric ごとに任意 schema
