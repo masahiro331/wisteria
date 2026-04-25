@@ -41,4 +41,4 @@ Fetchers expose `WithBaseURL` / `WithArchiveURL` and `WithHTTPClient` options so
 - TDD: write a failing test first, then the implementation, then refactor. Run `make test` and `make fmt` before committing.
 - Keep new source integrations behind the `Fetcher` interface so `cmd/fetch.go` stays uniform.
 - Branch-per-feature PRs: do not commit directly to `main`. For each functional unit of work, create a dedicated branch and open a PR.
-- No Claude attribution in git or GitHub artifacts: commit messages, PR titles, and PR bodies must not include `Co-Authored-By: Claude ...`, `🤖 Generated with [Claude Code]`, or any other Claude/Anthropic signature line.
+- No Claude attribution in git or GitHub artifacts: commit messages, PR titles, and PR bodies must not include `Co-Authored-By: Claude ...`, `🤖 Generated with [Claude Code]`, or any other Claude/Anthropic signature line. Enforced by the `commit-lint` workflow.
