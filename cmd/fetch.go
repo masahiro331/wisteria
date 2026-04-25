@@ -75,6 +75,17 @@ func newFetchCmd() *cobra.Command {
 		Use:   "fetch",
 		Short: "Download vulnerability data from upstream sources",
 	}
+	// HTTP-specific persistent flags live here, not on root, so they
+	// don't appear on non-fetch subcommands (e.g. `wisteria debug index`)
+	// where they'd be no-ops.
+	c.PersistentFlags().Int(
+		concurrencyFlag, 4,
+		"max parallel downloads (applies where the source has multiple files, e.g. OSV)",
+	)
+	c.PersistentFlags().Int(
+		retriesFlag, 3,
+		"max attempts per HTTP request before giving up (retries on 5xx and transport errors)",
+	)
 	c.AddCommand(
 		newFetchSourceCmd("osv", "Fetch OSV vulnerability data", osvFactory),
 		newFetchSourceCmd("cve", "Fetch MITRE CVEListV5 data", cveFactory),
