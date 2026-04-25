@@ -48,10 +48,10 @@ Fetchers expose `WithBaseURL` / `WithArchiveURL` and `WithHTTPClient` options so
 Use Codex as a second-opinion reviewer at two trigger points:
 
 1. **Stuck in implementation.** If three consecutive attempts at the same fix fail to make `make test` pass, or a non-trivial design decision needs a sanity check, hand the situation to Codex via the `codex:codex-rescue` subagent. Surface Codex's diagnosis to the user before continuing.
-2. **After a commit on a PR branch passes `make test`.** Run a Codex review automatically before pushing or opening a PR. Skip on `main` and on local-only branches that won't become PRs.
+2. **After a commit on any non-`main` branch passes `make test`.** Run a Codex review automatically right after the commit. Skip on `main`. Also skip when the commit is doc-only, formatting/cosmetic-only, or otherwise has no behavioral change (e.g. typo fix, comment rewording, gofmt-only). When in doubt, run the review.
 
 Mechanics for trigger 2:
 
-- Input: the full branch diff (`git diff main...HEAD`) plus the most relevant design doc under `docs/design/` if the change implements one.
+- Input: the full branch diff (`git diff main...HEAD`) plus all directly related design docs under `docs/design/`. If no design doc applies, say so explicitly when invoking Codex.
 - Caller: `codex:codex-rescue` subagent.
-- Disposition: relay Codex's findings to the user. Do not auto-apply fixes — the user decides whether to address each point in a follow-up commit.
+- Disposition: relay every Codex finding to the user, preserving each finding's severity (High/Medium/Low), affected files/lines, and Codex's overall verdict verbatim. Claude may add its own recommendation per finding but must not drop, re-rank, or downgrade items based on its own judgment. Do not auto-apply fixes — the user decides whether to address each point in a follow-up commit.
