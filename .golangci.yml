@@ -1,0 +1,118 @@
+version: "2"
+
+run:
+  go: "1.25"
+  timeout: 5m
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - gocritic
+    - gocyclo
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - perfsprint
+    - revive
+    - staticcheck
+    - unconvert
+    - unused
+    - usestdlibvars
+    - usetesting
+
+  settings:
+    gocritic:
+      disabled-checks:
+        - appendAssign
+        - commentedOutCode
+        - hugeParam
+        - importShadow
+        - rangeValCopy
+        - unnamedResult
+        - whyNoLint
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+        - opinionated
+    gocyclo:
+      min-complexity: 20
+    gosec:
+      excludes:
+        - G101
+        - G104 # Errors unhandled (defer Close idiom is widespread in Go)
+        - G114
+        - G115
+        - G204
+        - G304
+        - G402
+        - G404 # Weak RNG (math/rand is fine for backoff jitter)
+        - G704 # SSRF via taint analysis (false positives on internal HTTP clients)
+    govet:
+      disable:
+        - shadow
+    misspell:
+      locale: US
+      ignore-rules:
+        - mitre
+        - cancelled
+    revive:
+      rules:
+        - name: bool-literal-in-expr
+        - name: context-as-argument
+          arguments:
+            - allowTypesBefore: "*testing.T"
+        - name: duplicated-imports
+        - name: early-return
+          arguments:
+            - preserve-scope
+        - name: if-return
+        - name: increment-decrement
+        - name: indent-error-flow
+          arguments:
+            - preserve-scope
+        - name: range
+        - name: range-val-address
+        - name: superfluous-else
+          arguments:
+            - preserve-scope
+        - name: time-equal
+        - name: unnecessary-stmt
+        - name: unused-parameter
+        - name: use-any
+    staticcheck:
+      checks:
+        - all
+        - -ST1000 # Missing package comment
+        - -ST1003 # Poorly chosen identifier
+        - -ST1012 # Poorly chosen name for error variable
+        - -SA1019 # Using a deprecated function
+
+  exclusions:
+    generated: lax
+    rules:
+      - path: ".*_test.go$"
+        linters:
+          - gosec
+          - unused
+      - path: ".*_test.go$"
+        linters:
+          - gocritic
+        text: "exitAfterDefer:"
+    presets:
+      - common-false-positives
+      - std-error-handling
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: false

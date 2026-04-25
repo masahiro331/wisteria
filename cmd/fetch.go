@@ -16,6 +16,7 @@ import (
 type fetchOptions struct {
 	cacheDir    string
 	concurrency int
+	retries     int
 	tracker     *progress.Tracker
 }
 
@@ -27,19 +28,26 @@ func osvFactory(opts fetchOptions) fetcher.Fetcher {
 		osv.WithCacheDir(opts.cacheDir),
 		osv.WithProgress(opts.tracker),
 		osv.WithConcurrency(opts.concurrency),
+		osv.WithRetries(opts.retries),
 	)
 }
 
 func cveFactory(opts fetchOptions) fetcher.Fetcher {
-	return cve.New(cve.WithCacheDir(opts.cacheDir), cve.WithProgress(opts.tracker))
+	return cve.New(
+		cve.WithCacheDir(opts.cacheDir),
+		cve.WithProgress(opts.tracker),
+		cve.WithRetries(opts.retries),
+	)
 }
 
 func optionsFromCmd(cmd *cobra.Command) fetchOptions {
 	cacheDir, _ := cmd.Flags().GetString(cacheDirFlag)
 	concurrency, _ := cmd.Flags().GetInt(concurrencyFlag)
+	retries, _ := cmd.Flags().GetInt(retriesFlag)
 	return fetchOptions{
 		cacheDir:    cacheDir,
 		concurrency: concurrency,
+		retries:     retries,
 		tracker:     newTracker(cmd.ErrOrStderr()),
 	}
 }

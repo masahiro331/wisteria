@@ -5,6 +5,7 @@ import "github.com/spf13/cobra"
 const (
 	cacheDirFlag    = "cache-dir"
 	concurrencyFlag = "concurrency"
+	retriesFlag     = "retries"
 )
 
 // NewRootCmd builds the top-level wisteria command tree.
@@ -22,6 +23,10 @@ func NewRootCmd() *cobra.Command {
 	root.PersistentFlags().Int(
 		concurrencyFlag, 4,
 		"max parallel downloads (applies where the source has multiple files, e.g. OSV)",
+	)
+	root.PersistentFlags().Int(
+		retriesFlag, 3,
+		"max attempts per HTTP request before giving up (retries on 5xx and transport errors)",
 	)
 	root.AddCommand(newFetchCmd())
 	return root
