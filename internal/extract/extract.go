@@ -37,9 +37,9 @@ func writeZipEntry(entry *zip.File, dest string) error {
 		return err
 	}
 	if entry.FileInfo().IsDir() {
-		return os.MkdirAll(target, 0o755)
+		return os.MkdirAll(target, 0o750)
 	}
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
 		return err
 	}
 	src, err := entry.Open()
@@ -86,9 +86,9 @@ func writeTarEntry(hdr *tar.Header, tr *tar.Reader, dest string) error {
 	}
 	switch hdr.Typeflag {
 	case tar.TypeDir:
-		return os.MkdirAll(target, 0o755)
+		return os.MkdirAll(target, 0o750)
 	case tar.TypeReg:
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
 			return err
 		}
 		return copyTo(target, tr)
@@ -104,9 +104,12 @@ func copyTo(target string, src io.Reader) error {
 	if err != nil {
 		return fmt.Errorf("create %s: %w", target, err)
 	}
-	defer out.Close()
 	if _, err := io.Copy(out, src); err != nil {
+		_ = out.Close()
 		return fmt.Errorf("write %s: %w", target, err)
+	}
+	if err := out.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", target, err)
 	}
 	return nil
 }

@@ -16,6 +16,7 @@ import (
 
 	"github.com/masahiro331/wisteria/internal/cache"
 	"github.com/masahiro331/wisteria/internal/extract"
+	"github.com/masahiro331/wisteria/internal/httpx"
 	"github.com/masahiro331/wisteria/internal/progress"
 )
 
@@ -52,6 +53,16 @@ func WithConcurrency(n int) Option {
 	}
 }
 
+// WithRetries sets how many times each HTTP request is attempted before
+// giving up. Values <= 0 fall back to the httpx default.
+func WithRetries(n int) Option {
+	return func(f *Fetcher) {
+		if n > 0 {
+			f.retry.Attempts = n
+		}
+	}
+}
+
 // Fetcher downloads OSV per-ecosystem archives.
 type Fetcher struct {
 	baseURL     string
@@ -59,6 +70,7 @@ type Fetcher struct {
 	cacheDir    string
 	progress    *progress.Tracker
 	concurrency int
+	retry       httpx.RetryOptions
 }
 
 // New constructs a Fetcher with optional overrides.
@@ -138,7 +150,7 @@ func (f *Fetcher) downloadEcosystem(ctx context.Context, root, ecosystem string)
 	defer resp.Body.Close()
 
 	dir := filepath.Join(root, ecosystem)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return err
 	}
 	dest := filepath.Join(dir, archiveName)
@@ -159,11 +171,18 @@ func writeArchive(dest string, resp *http.Response, bar *progress.Bar) error {
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 	body := bar.ProxyReader(resp.Body)
-	defer body.Close()
 	if _, err := io.Copy(out, body); err != nil {
+		_ = body.Close()
+		_ = out.Close()
 		return fmt.Errorf("write %s: %w", dest, err)
+	}
+	if err := body.Close(); err != nil {
+		_ = out.Close()
+		return fmt.Errorf("close body: %w", err)
+	}
+	if err := out.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", dest, err)
 	}
 	return nil
 }
@@ -173,11 +192,11 @@ func (f *Fetcher) get(ctx context.Context, path string) (*http.Response, error) 
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := f.client.Do(req)
+	resp, err := httpx.DoWithRetry(ctx, f.client, req, f.retry)
 	if err != nil {
 		return nil, err
 	}

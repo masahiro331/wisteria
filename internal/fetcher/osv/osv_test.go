@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -138,31 +137,27 @@ func TestFetcher_Fetch_LimitsConcurrency(t *testing.T) {
 	}
 }
 
+// TestFetcher_Fetch_CancelsSiblingsOnError verifies that when one
+// ecosystem download fails, Fetch returns promptly rather than waiting
+// for the other (slow) downloads to finish. We don't assert on the
+// server-side ctx cancellation because that races with the
+// client-server handshake; the elapsed-time check is what matters.
 func TestFetcher_Fetch_CancelsSiblingsOnError(t *testing.T) {
 	ecosystems := []string{"fail", "slow1", "slow2", "slow3"}
+	const slowDelay = 5 * time.Second
 
-	var (
-		mu       sync.Mutex
-		canceled []string
-	)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ecosystems.txt", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(strings.Join(ecosystems, "\n")))
 	})
 	mux.HandleFunc("/fail/all.zip", func(w http.ResponseWriter, _ *http.Request) {
-		time.Sleep(100 * time.Millisecond)
 		http.Error(w, "boom", http.StatusInternalServerError)
 	})
 	for _, eco := range ecosystems[1:] {
-		eco := eco
 		mux.HandleFunc("/"+eco+"/all.zip", func(w http.ResponseWriter, r *http.Request) {
 			select {
 			case <-r.Context().Done():
-				mu.Lock()
-				canceled = append(canceled, eco)
-				mu.Unlock()
-				return
-			case <-time.After(5 * time.Second):
+			case <-time.After(slowDelay):
 				_, _ = w.Write(zipBytes(t, map[string]string{"v.json": "{}"}))
 			}
 		})
@@ -176,20 +171,17 @@ func TestFetcher_Fetch_CancelsSiblingsOnError(t *testing.T) {
 		WithHTTPClient(srv.Client()),
 		WithCacheDir(override),
 		WithConcurrency(len(ecosystems)),
+		WithRetries(1), // surface the 500 immediately
 	)
 
 	start := time.Now()
 	if _, err := f.Fetch(context.Background()); err == nil {
 		t.Fatal("expected error from failing ecosystem, got nil")
 	}
-	if elapsed := time.Since(start); elapsed > 3*time.Second {
+	// Allow generous slack for slow CI: anything well below the slow
+	// handler's 5s wait proves siblings were cancelled, not awaited.
+	if elapsed := time.Since(start); elapsed > slowDelay/2 {
 		t.Errorf("Fetch took %s — siblings were not canceled promptly", elapsed)
-	}
-
-	mu.Lock()
-	defer mu.Unlock()
-	if len(canceled) == 0 {
-		t.Error("expected at least one slow ecosystem to observe ctx cancellation")
 	}
 }
 

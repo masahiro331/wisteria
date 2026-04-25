@@ -23,7 +23,7 @@ func Root(override string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := os.MkdirAll(root, 0o755); err != nil {
+	if err := os.MkdirAll(root, 0o750); err != nil {
 		return "", fmt.Errorf("create cache dir %s: %w", root, err)
 	}
 	return root, nil
@@ -36,7 +36,7 @@ func Dir(override, source string) (string, error) {
 		return "", err
 	}
 	dir := filepath.Join(root, source)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return "", fmt.Errorf("create cache dir %s: %w", dir, err)
 	}
 	return dir, nil

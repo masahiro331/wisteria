@@ -12,6 +12,7 @@ import (
 
 	"github.com/masahiro331/wisteria/internal/cache"
 	"github.com/masahiro331/wisteria/internal/extract"
+	"github.com/masahiro331/wisteria/internal/httpx"
 	"github.com/masahiro331/wisteria/internal/progress"
 )
 
@@ -35,12 +36,23 @@ func WithCacheDir(dir string) Option { return func(f *Fetcher) { f.cacheDir = di
 // WithProgress attaches a progress tracker. A nil tracker disables progress UI.
 func WithProgress(t *progress.Tracker) Option { return func(f *Fetcher) { f.progress = t } }
 
+// WithRetries sets how many times each HTTP request is attempted before
+// giving up. Values <= 0 fall back to the httpx default.
+func WithRetries(n int) Option {
+	return func(f *Fetcher) {
+		if n > 0 {
+			f.retry.Attempts = n
+		}
+	}
+}
+
 // Fetcher downloads the MITRE CVEListV5 tarball.
 type Fetcher struct {
 	archiveURL string
 	client     *http.Client
 	cacheDir   string
 	progress   *progress.Tracker
+	retry      httpx.RetryOptions
 }
 
 // New constructs a Fetcher with optional overrides.
@@ -63,11 +75,11 @@ func (f *Fetcher) Fetch(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, f.archiveURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, f.archiveURL, http.NoBody)
 	if err != nil {
 		return "", err
 	}
-	resp, err := f.client.Do(req)
+	resp, err := httpx.DoWithRetry(ctx, f.client, req, f.retry)
 	if err != nil {
 		return "", err
 	}
@@ -96,11 +108,18 @@ func writeArchive(dest string, resp *http.Response, bar *progress.Bar) error {
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 	body := bar.ProxyReader(resp.Body)
-	defer body.Close()
 	if _, err := io.Copy(out, body); err != nil {
+		_ = body.Close()
+		_ = out.Close()
 		return fmt.Errorf("write %s: %w", dest, err)
+	}
+	if err := body.Close(); err != nil {
+		_ = out.Close()
+		return fmt.Errorf("close body: %w", err)
+	}
+	if err := out.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", dest, err)
 	}
 	return nil
 }
