@@ -102,7 +102,7 @@ func (f *Fetcher) Fetch(ctx context.Context) (string, error) {
 	return dir, nil
 }
 
-func writeDecompressed(dest string, resp *http.Response, bar *progress.Bar) error {
+func writeDecompressed(dest string, resp *http.Response, bar *progress.Bar) (err error) {
 	body := bar.ProxyReader(resp.Body)
 	defer body.Close()
 
@@ -112,22 +112,35 @@ func writeDecompressed(dest string, resp *http.Response, bar *progress.Bar) erro
 	}
 	defer gz.Close()
 
-	out, err := os.Create(dest)
+	// Write to a temp file in the same directory and rename atomically only on
+	// success, so a failed download (gzip error, bomb-guard, partial copy)
+	// never leaves a truncated CSV at dest.
+	tmp, err := os.CreateTemp(filepath.Dir(dest), filepath.Base(dest)+".tmp-*")
 	if err != nil {
 		return err
 	}
+	tmpName := tmp.Name()
+	defer func() {
+		if err != nil {
+			_ = os.Remove(tmpName)
+		}
+	}()
+
 	limited := io.LimitReader(gz, maxDecompressedBytes+1)
-	n, err := io.Copy(out, limited)
+	n, err := io.Copy(tmp, limited)
 	if err != nil {
-		_ = out.Close()
-		return fmt.Errorf("write %s: %w", dest, err)
+		_ = tmp.Close()
+		return fmt.Errorf("write %s: %w", tmpName, err)
 	}
 	if n > maxDecompressedBytes {
-		_ = out.Close()
+		_ = tmp.Close()
 		return fmt.Errorf("decompressed payload exceeds %d bytes", maxDecompressedBytes)
 	}
-	if err := out.Close(); err != nil {
-		return fmt.Errorf("close %s: %w", dest, err)
+	if err = tmp.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", tmpName, err)
+	}
+	if err = os.Rename(tmpName, dest); err != nil {
+		return fmt.Errorf("rename %s -> %s: %w", tmpName, dest, err)
 	}
 	return nil
 }

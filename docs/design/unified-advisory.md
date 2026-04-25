@@ -77,7 +77,7 @@ Stage 1: Walk     → map[PrimaryID][]IndexEntry            (索引のみ。中�
 Stage 2: Unify    → []UnifiedAdvisory                     (各 IndexEntry を full parse + semantic merge)
 Stage 3: Write    → <cache-dir>/unified/cve/<year>/<CVE-ID>.json
                     <cache-dir>/unified/standalone/<ecosystem>/<id>.json
-Stage 4: Annotate → 既存 unified JSON を読み、KEV メタを `kev` フィールドに追記して書き戻す
+Stage 4: Annotate → 既存 unified JSON を読み、KEV / EPSS メタを `kev` / `epss` フィールドに追記して書き戻す
 ```
 
 (*) PrimaryID 決定のために OSV の `id` と `aliases` だけは読む。SourceRecord 等の構築はせず、map を作るためだけの軽量読み込み。

@@ -104,13 +104,20 @@ func TestFetcher_Fetch_RejectsOversizedPayload(t *testing.T) {
 	maxDecompressedBytes = 1024
 	t.Cleanup(func() { maxDecompressedBytes = prev })
 
-	tmp := t.TempDir()
-	t.Setenv("HOME", tmp)
-	t.Setenv("XDG_CACHE_HOME", tmp)
-
-	f := New(WithCatalogURL(srv.URL+"/x.csv.gz"), WithHTTPClient(srv.Client()))
+	override := t.TempDir()
+	f := New(
+		WithCatalogURL(srv.URL+"/x.csv.gz"),
+		WithHTTPClient(srv.Client()),
+		WithCacheDir(override),
+	)
 	if _, err := f.Fetch(context.Background()); err == nil {
 		t.Fatal("expected error for oversized payload, got nil")
+	}
+
+	// bomb-guard が発火した場合、canonical path に truncated な CSV を残してはいけない。
+	plain := filepath.Join(override, "sources", "epss", "epss_scores-current.csv")
+	if _, err := os.Stat(plain); !os.IsNotExist(err) {
+		t.Errorf("expected %s to be absent after guarded failure, stat err = %v", plain, err)
 	}
 }
 
