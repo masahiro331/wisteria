@@ -57,7 +57,13 @@ var bucketMkdir sync.Map // map[string]struct{}
 // expected to do RemoveAll + MkdirAll before streaming Write calls.
 // The split exists so per-record fan-out can run without coordinating
 // the one-shot tree reset.
+//
+// Init also clears the package-level bucket-mkdir cache: a second call
+// in the same process means the caller is about to RemoveAll outDir,
+// and a stale cache hit would skip the MkdirAll on the next Write and
+// then fail at CreateTemp on a missing parent.
 func Init(cacheDir string) (string, error) {
+	bucketMkdir.Clear()
 	if cacheDir == "" {
 		return "", errors.New("writer: cacheDir is empty")
 	}
@@ -179,12 +185,18 @@ func primaryEcosystem(provs []unified.Provenance) (string, error) {
 // osvEcosystem extracts the ecosystem directory name from an OSV
 // provenance path of the shape "osv/<eco>/<file>.json". walker.Index
 // guarantees this layout when Kind is SourceOSV.
+//
+// Spaces are normalized to "_" to match the form walker stores in
+// IndexEntry.Source and the form the priority array uses (e.g.
+// "Red Hat" → "Red_Hat"). Without this, the SourceTag below would miss
+// the priority table for any multi-word ecosystem and route those
+// records to the wrong standalone bucket.
 func osvEcosystem(provPath string) string {
 	parts := strings.Split(provPath, "/")
 	if len(parts) < 2 || parts[0] != "osv" {
 		return ""
 	}
-	return parts[1]
+	return strings.ReplaceAll(parts[1], " ", "_")
 }
 
 // escapeFilename replaces filesystem-unsafe characters in a PrimaryID.
