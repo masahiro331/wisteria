@@ -26,6 +26,7 @@ See `docs/meetings/2026-04-25-project-design.md` for the full requirements list 
 
 - `main.go` — entrypoint; wires signal-aware context into the root command.
 - `cmd/` — Cobra command tree. `fetch` subcommands (`osv`, `cve`, `kev`, `epss`, `all`) delegate to fetchers via the `fetcher.Fetcher` interface.
+- `cmd/debug/` — `wisteria debug` parent + one-file-per-subcommand inspection helpers. `debug index` prints walker.Index distribution (PrimaryIDs total, per-Kind entry counts, entries-per-PrimaryID histogram, per-ecosystem OSV counts) or, with `--id`, lists the IndexEntry paths under one PrimaryID (exits non-zero if not found). Subcommands inherit the persistent `--cache-dir` flag.
 - `internal/fetcher/fetcher.go` — defines the `Fetcher` interface (`Name()`, `Fetch(ctx) (dir, error)`). New sources implement this interface so commands can treat them uniformly.
 - `internal/fetcher/osv/` — OSV fetcher; reads `ecosystems.txt` then downloads each `{ecosystem}/all.zip`. Downloads run in parallel via `errgroup` with a configurable cap (`--concurrency`, default 4); the first error cancels in-flight siblings. Each archive is unzipped in place and removed.
 - `internal/fetcher/cve/` — MITRE CVEListV5 fetcher; downloads the repo tarball, extracts it, and removes the tarball.

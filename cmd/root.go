@@ -1,6 +1,10 @@
 package cmd
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/spf13/cobra"
+
+	"github.com/masahiro331/wisteria/cmd/debug"
+)
 
 const (
 	cacheDirFlag    = "cache-dir"
@@ -16,18 +20,15 @@ func NewRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+	// --cache-dir is the only truly cross-cutting flag: both `fetch`
+	// (write target) and `debug` (read target) need it. HTTP-specific
+	// knobs like --retries / --concurrency live on `fetch` itself so
+	// they don't appear as no-op flags on `debug` subcommands.
 	root.PersistentFlags().String(
 		cacheDirFlag, "",
 		"directory for downloaded data (overrides $WISTERIA_CACHE_DIR; defaults to user cache dir)",
 	)
-	root.PersistentFlags().Int(
-		concurrencyFlag, 4,
-		"max parallel downloads (applies where the source has multiple files, e.g. OSV)",
-	)
-	root.PersistentFlags().Int(
-		retriesFlag, 3,
-		"max attempts per HTTP request before giving up (retries on 5xx and transport errors)",
-	)
 	root.AddCommand(newFetchCmd())
+	root.AddCommand(debug.NewCmd())
 	return root
 }
