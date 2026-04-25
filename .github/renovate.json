@@ -1,0 +1,50 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "enabledManagers": [
+    "gomod",
+    "github-actions"
+  ],
+  "schedule": [
+    "before 6am on monday"
+  ],
+  "timezone": "Asia/Tokyo",
+  "prHourlyLimit": 0,
+  "prConcurrentLimit": 0,
+  "osvVulnerabilityAlerts": true,
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": [
+      "kind/security"
+    ],
+    "schedule": []
+  },
+  "github-actions": {
+    "pinDigests": true
+  },
+  "packageRules": [
+    {
+      "description": "Group all non-security gomod updates into one weekly PR.",
+      "matchManagers": [
+        "gomod"
+      ],
+      "groupName": "gomod non-security updates",
+      "schedule": [
+        "before 6am on monday"
+      ]
+    },
+    {
+      "description": "Group all non-security GitHub Actions updates into one weekly PR and pin to commit SHAs.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "github-actions non-security updates",
+      "pinDigests": true,
+      "schedule": [
+        "before 6am on monday"
+      ]
+    }
+  ]
+}
