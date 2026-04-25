@@ -95,3 +95,83 @@ func formatScore(p *float64) string {
 	}
 	return strconv.FormatFloat(*p, 'f', -1, 64)
 }
+
+// OSVDescriptions emits up to two parallel descriptions per record:
+// Summary then Details, both as English text. Lang is fixed to "en"
+// because OSV schema does not carry a per-text lang field. Empty
+// strings are skipped so we don't emit blank entries.
+func OSVDescriptions(rec osv.Record, from unified.Provenance, source string) []descriptionItem {
+	var out []descriptionItem
+	if rec.Summary != "" {
+		out = append(out, descriptionItem{
+			Description: unified.Description{Lang: "en", Text: rec.Summary, From: from},
+			source:      source,
+		})
+	}
+	if rec.Details != "" {
+		out = append(out, descriptionItem{
+			Description: unified.Description{Lang: "en", Text: rec.Details, From: from},
+			source:      source,
+		})
+	}
+	return out
+}
+
+// CVEDescriptions converts a single Container's descriptions[]. The
+// caller invokes it once for the CNA and once per ADP so each container
+// can carry its own Provenance (typically with an "#adp:<name>" suffix
+// on the ID for ADPs). cve.Description.Value maps to unified.Description.Text.
+func CVEDescriptions(in []cve.Description, from unified.Provenance) []descriptionItem {
+	out := make([]descriptionItem, 0, len(in))
+	for _, d := range in {
+		out = append(out, descriptionItem{
+			Description: unified.Description{Lang: d.Lang, Text: d.Value, From: from},
+			source:      "cve.mitre",
+		})
+	}
+	return out
+}
+
+// OSVAffectedRecords wraps each osv.Affected as an AffectedRecord with
+// the source-side substructure preserved (no field-by-field copy).
+func OSVAffectedRecords(in []osv.Affected, from unified.Provenance, source string) []affectedItem {
+	out := make([]affectedItem, 0, len(in))
+	for i := range in {
+		aff := in[i] // copy so the &aff escape doesn't share the loop var
+		out = append(out, affectedItem{
+			record: unified.AffectedRecord{From: from, OSV: &aff},
+			source: source,
+		})
+	}
+	return out
+}
+
+// CVEAffectedRecords does the same for one CVE5 Container's affected[].
+func CVEAffectedRecords(in []cve.Affected, from unified.Provenance) []affectedItem {
+	out := make([]affectedItem, 0, len(in))
+	for i := range in {
+		aff := in[i]
+		out = append(out, affectedItem{
+			record: unified.AffectedRecord{From: from, CVE: &aff},
+			source: "cve.mitre",
+		})
+	}
+	return out
+}
+
+// ADPProvenance derives a Provenance for one ADP container of a CVE5
+// record. CVE5 spec allows multiple ADPs per record (CISA Vulnrichment,
+// Red Hat etc.); we suffix the ID with "#adp:<shortName>" so the
+// downstream merge functions can sort CNA before its ADPs and tell them
+// apart in JSON. providerShortName falls back to the slice index when
+// the ADP omits its providerMetadata.
+func ADPProvenance(base unified.Provenance, adp cve.ADP, idx int) unified.Provenance {
+	short := ""
+	if adp.ProviderMetadata != nil {
+		short = adp.ProviderMetadata.ShortName
+	}
+	if short == "" {
+		short = "idx" + strconv.Itoa(idx)
+	}
+	return unified.Provenance{Kind: base.Kind, Path: base.Path, ID: base.ID + "#adp:" + short}
+}
