@@ -14,6 +14,7 @@ func TestRoot_CacheDirFlagInheritedBySubcommands(t *testing.T) {
 		{"fetch", "osv"},
 		{"fetch", "cve"},
 		{"fetch", "kev"},
+		{"fetch", "epss"},
 		{"fetch", "all"},
 	}
 	for _, path := range cases {
