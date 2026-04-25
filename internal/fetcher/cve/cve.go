@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/masahiro331/wisteria/internal/cache"
+	"github.com/masahiro331/wisteria/internal/progress"
 )
 
 const (
@@ -30,11 +31,15 @@ func WithHTTPClient(c *http.Client) Option { return func(f *Fetcher) { f.client 
 // WithCacheDir overrides the cache root used to store downloads.
 func WithCacheDir(dir string) Option { return func(f *Fetcher) { f.cacheDir = dir } }
 
+// WithProgress attaches a progress tracker. A nil tracker disables progress UI.
+func WithProgress(t *progress.Tracker) Option { return func(f *Fetcher) { f.progress = t } }
+
 // Fetcher downloads the MITRE CVEListV5 tarball.
 type Fetcher struct {
 	archiveURL string
 	client     *http.Client
 	cacheDir   string
+	progress   *progress.Tracker
 }
 
 // New constructs a Fetcher with optional overrides.
@@ -76,8 +81,12 @@ func (f *Fetcher) Fetch(ctx context.Context) (string, error) {
 		return "", err
 	}
 	defer out.Close()
-	if _, err := io.Copy(out, resp.Body); err != nil {
+
+	body := f.progress.Bar(sourceName, resp.ContentLength).ProxyReader(resp.Body)
+	defer body.Close()
+	if _, err := io.Copy(out, body); err != nil {
 		return "", fmt.Errorf("write %s: %w", dest, err)
 	}
+	f.progress.Wait()
 	return dir, nil
 }
