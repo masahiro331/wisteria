@@ -379,8 +379,8 @@ func Unify(ctx context.Context, index map[string][]unified.IndexEntry) ([]unifie
 func UnifyBestEffort(ctx context.Context, index map[string][]unified.IndexEntry, logger *slog.Logger) ([]unified.UnifiedAdvisory, error)
 ```
 
-- IndexEntry.Kind / Source / RelPath は Stage 1 で確定済み。Stage 2 では再判定しない
-- Provenance.Path には IndexEntry.RelPath をそのまま入れる
+- IndexEntry.Kind / Source / Path は Stage 1 で確定済み。Stage 2 では再判定しない
+- Provenance.Path には IndexEntry.Path をそのまま入れる
 - PrimaryID 単位でフィールド別 merge (`mergeReferences`, `mergeSeverities`, ...) を順に適用
 - SourceIDs は各 source の `id` および `aliases` のうち PrimaryID 以外をすべて集めて dedup + 辞書順
 - production の error メッセージにも path を含める
@@ -505,7 +505,7 @@ internal/unified/testdata/
   - 期待 IndexEntry map が返ること
   - CVE-ID なし OSV (ALBA-*) が standalone として PrimaryID = 自身の id で索引に残ること
   - 1 OSV の aliases に複数 CVE-ID がある場合は各 CVE-ID 配下に同じ IndexEntry が登録されること (§3.1)
-  - IndexEntry の Kind / Source / RelPath / SourceID が正しく埋まること
+  - IndexEntry の Kind / Source / Path / SourceID が正しく埋まること
 - **PrimaryID 決定 (§3.1)**: CVE-ID あり / 無し / 複数 CVE-ID alias / 単一 CVE-ID alias の各ケースを網羅
 - **mergeReferences**: 同 URL 別表記の dedup、tags の和集合、辞書順
 - **mergeSeverities**: `(Type, Vector)` dedup、Vector 無し時の `(Type, Score)` フォールバック、評価が違う severity が並列保持されること
