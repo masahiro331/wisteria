@@ -80,5 +80,5 @@ Use Codex as a second-opinion reviewer at two trigger points:
 Mechanics for trigger 2:
 
 - Input: the full branch diff (`git diff main...HEAD`) plus all directly related design docs under `docs/design/`. If no design doc applies, say so explicitly when invoking Codex.
-- Caller: `codex:codex-rescue` subagent.
+- Caller: invoke via the `Agent` tool with `subagent_type: "codex:codex-rescue"`. Do NOT call the `codex:review` skill directly — it is user-invocation only (`disable-model-invocation`) and will fail when the model tries to launch it.
 - Disposition: relay every Codex finding to the user, preserving each finding's severity (High/Medium/Low), affected files/lines, and Codex's overall verdict verbatim. Claude may add its own recommendation per finding but must not drop, re-rank, or downgrade items based on its own judgment. Do not auto-apply fixes — the user decides whether to address each point in a follow-up commit.
