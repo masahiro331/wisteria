@@ -56,11 +56,11 @@ Tasks live in **GitHub Issues**, not in design docs. Design docs in `docs/design
 
 Labels in use:
 
-- `phase/1-unified-advisory`, `phase/2-ai`, `phase/3-postgres` — which roadmap phase the work belongs to
+- `phase/1-source-ingestion`, `phase/2-ai`, `phase/3-postgres` — which roadmap phase the work belongs to
 - `kind/feature`, `kind/refactor`, `kind/open-question`, `kind/codex-finding` — what kind of work it is
 - `priority/blocker` — apply only when the issue blocks other work; default is no priority label
 
-Milestone `Unified Advisory pipeline` bundles the entire Stage 1-4 implementation. (Distinct from "Phase 1" in the project phasing, which refers to source ingestion as a whole.)
+Milestone `Unified Advisory pipeline` bundles the entire Stage 1-4 implementation. The milestone lives inside Phase 1 (source ingestion), not above it.
 
 ## Codex review
 
