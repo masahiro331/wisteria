@@ -1,0 +1,53 @@
+name: commit-lint
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  forbid-claude-attribution:
+    name: forbid-claude-attribution
+    runs-on: ubuntu-latest
+    env:
+      PATTERN: 'Co-[Aa]uthored-[Bb]y:.*[Cc]laude|noreply@anthropic\.com|Generated with \[Claude Code\]|🤖 Generated with'
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_BODY: ${{ github.event.pull_request.body }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check commit messages
+        run: |
+          set -euo pipefail
+          range="${BASE_SHA}..${HEAD_SHA}"
+          echo "Scanning commits in $range"
+          offenders="$(git log --format='%H%n%B%n--END--' "$range" | grep -E -in "$PATTERN" || true)"
+          if [ -n "$offenders" ]; then
+            echo "::error::Claude attribution found in commit messages:"
+            echo "$offenders"
+            exit 1
+          fi
+          echo "OK: no Claude attribution in commit messages."
+
+      - name: Check PR title and body
+        run: |
+          set -euo pipefail
+          fail=0
+          if printf '%s' "$PR_TITLE" | grep -E -i "$PATTERN" >/dev/null; then
+            echo "::error::Claude attribution found in PR title."
+            fail=1
+          fi
+          if printf '%s' "$PR_BODY" | grep -E -i "$PATTERN" >/dev/null; then
+            echo "::error::Claude attribution found in PR body."
+            fail=1
+          fi
+          exit "$fail"
