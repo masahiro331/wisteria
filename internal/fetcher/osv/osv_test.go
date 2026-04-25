@@ -1,7 +1,10 @@
 package osv
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -20,16 +23,16 @@ func TestFetcher_Name(t *testing.T) {
 	}
 }
 
-func TestFetcher_Fetch_DownloadsEcosystemArchives(t *testing.T) {
+func TestFetcher_Fetch_ExtractsAndRemovesArchives(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ecosystems.txt", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("PyPI\nGo\n"))
 	})
 	mux.HandleFunc("/PyPI/all.zip", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("pypi-zip-bytes"))
+		_, _ = w.Write(zipBytes(t, map[string]string{"CVE-2024-1.json": `{"id":"PyPI-1"}`}))
 	})
 	mux.HandleFunc("/Go/all.zip", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("go-zip-bytes"))
+		_, _ = w.Write(zipBytes(t, map[string]string{"CVE-2024-2.json": `{"id":"GO-1"}`}))
 	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
@@ -44,21 +47,25 @@ func TestFetcher_Fetch_DownloadsEcosystemArchives(t *testing.T) {
 		t.Fatalf("Fetch returned error: %v", err)
 	}
 
-	if !strings.Contains(dir, "osv") {
-		t.Errorf("expected dir to contain %q, got %q", "osv", dir)
+	want := map[string]string{
+		filepath.Join(dir, "PyPI", "CVE-2024-1.json"): `{"id":"PyPI-1"}`,
+		filepath.Join(dir, "Go", "CVE-2024-2.json"):   `{"id":"GO-1"}`,
 	}
-
-	cases := map[string]string{
-		filepath.Join(dir, "PyPI", "all.zip"): "pypi-zip-bytes",
-		filepath.Join(dir, "Go", "all.zip"):   "go-zip-bytes",
-	}
-	for path, want := range cases {
+	for path, body := range want {
 		got, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatalf("read %s: %v", path, err)
 		}
-		if string(got) != want {
-			t.Errorf("%s contents = %q, want %q", path, got, want)
+		if string(got) != body {
+			t.Errorf("%s = %q, want %q", path, got, body)
+		}
+	}
+
+	// Archives must be removed after extraction.
+	for _, eco := range []string{"PyPI", "Go"} {
+		archive := filepath.Join(dir, eco, "all.zip")
+		if _, err := os.Stat(archive); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("expected %s to be removed, stat err = %v", archive, err)
 		}
 	}
 }
@@ -79,11 +86,6 @@ func TestFetcher_Fetch_ReturnsErrorWhenEcosystemListFails(t *testing.T) {
 	}
 }
 
-// TestFetcher_Fetch_LimitsConcurrency verifies that downloads run in parallel
-// but never exceed the configured concurrency cap. The fake server records the
-// number of in-flight ecosystem downloads and the test asserts the observed
-// peak matches the limit exactly (achievable because we have many more
-// ecosystems than the limit).
 func TestFetcher_Fetch_LimitsConcurrency(t *testing.T) {
 	const (
 		ecoCount = 8
@@ -112,9 +114,8 @@ func TestFetcher_Fetch_LimitsConcurrency(t *testing.T) {
 					break
 				}
 			}
-			// Hold the connection long enough for siblings to pile up.
 			time.Sleep(50 * time.Millisecond)
-			_, _ = w.Write([]byte("payload"))
+			_, _ = w.Write(zipBytes(t, map[string]string{"v.json": "{}"}))
 		})
 	}
 	srv := httptest.NewServer(mux)
@@ -137,9 +138,6 @@ func TestFetcher_Fetch_LimitsConcurrency(t *testing.T) {
 	}
 }
 
-// TestFetcher_Fetch_CancelsSiblingsOnError verifies that when one download
-// fails, the in-flight siblings see ctx cancellation rather than running to
-// completion.
 func TestFetcher_Fetch_CancelsSiblingsOnError(t *testing.T) {
 	ecosystems := []string{"fail", "slow1", "slow2", "slow3"}
 
@@ -152,8 +150,6 @@ func TestFetcher_Fetch_CancelsSiblingsOnError(t *testing.T) {
 		_, _ = w.Write([]byte(strings.Join(ecosystems, "\n")))
 	})
 	mux.HandleFunc("/fail/all.zip", func(w http.ResponseWriter, _ *http.Request) {
-		// Delay slightly so the slow handlers below are guaranteed to be
-		// in their select before the error propagates and cancels gctx.
 		time.Sleep(100 * time.Millisecond)
 		http.Error(w, "boom", http.StatusInternalServerError)
 	})
@@ -167,7 +163,7 @@ func TestFetcher_Fetch_CancelsSiblingsOnError(t *testing.T) {
 				mu.Unlock()
 				return
 			case <-time.After(5 * time.Second):
-				_, _ = w.Write([]byte("never"))
+				_, _ = w.Write(zipBytes(t, map[string]string{"v.json": "{}"}))
 			}
 		})
 	}
@@ -203,7 +199,7 @@ func TestFetcher_Fetch_RespectsCacheDirOverride(t *testing.T) {
 		_, _ = w.Write([]byte("PyPI\n"))
 	})
 	mux.HandleFunc("/PyPI/all.zip", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("pypi-zip-bytes"))
+		_, _ = w.Write(zipBytes(t, map[string]string{"v.json": `{"id":"x"}`}))
 	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
@@ -223,7 +219,26 @@ func TestFetcher_Fetch_RespectsCacheDirOverride(t *testing.T) {
 	if dir != want {
 		t.Errorf("dir = %q, want %q", dir, want)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "PyPI", "all.zip")); err != nil {
-		t.Errorf("expected archive under override: %v", err)
+	if _, err := os.Stat(filepath.Join(dir, "PyPI", "v.json")); err != nil {
+		t.Errorf("expected extracted file under override: %v", err)
 	}
+}
+
+func zipBytes(t *testing.T, entries map[string]string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	w := zip.NewWriter(&buf)
+	for name, body := range entries {
+		fw, err := w.Create(name)
+		if err != nil {
+			t.Fatalf("create entry %s: %v", name, err)
+		}
+		if _, err := fw.Write([]byte(body)); err != nil {
+			t.Fatalf("write entry %s: %v", name, err)
+		}
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("close zip: %v", err)
+	}
+	return buf.Bytes()
 }

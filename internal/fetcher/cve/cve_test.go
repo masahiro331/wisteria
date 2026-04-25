@@ -1,7 +1,11 @@
 package cve
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,10 +20,13 @@ func TestFetcher_Name(t *testing.T) {
 	}
 }
 
-func TestFetcher_Fetch_DownloadsArchive(t *testing.T) {
-	const payload = "tarball-bytes"
+func TestFetcher_Fetch_ExtractsAndRemovesArchive(t *testing.T) {
+	payload := tarGzBytes(t, map[string]string{
+		"cvelistV5-main/README.md":            "hi",
+		"cvelistV5-main/cves/CVE-2024-1.json": `{"id":"CVE-2024-1"}`,
+	})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(payload))
+		_, _ = w.Write(payload)
 	}))
 	defer srv.Close()
 
@@ -36,19 +43,33 @@ func TestFetcher_Fetch_DownloadsArchive(t *testing.T) {
 	if !strings.Contains(dir, "cve") {
 		t.Errorf("expected dir to contain %q, got %q", "cve", dir)
 	}
-	got, err := os.ReadFile(filepath.Join(dir, "main.tar.gz"))
-	if err != nil {
-		t.Fatalf("read archive: %v", err)
+
+	want := map[string]string{
+		filepath.Join(dir, "cvelistV5-main", "README.md"):               "hi",
+		filepath.Join(dir, "cvelistV5-main", "cves", "CVE-2024-1.json"): `{"id":"CVE-2024-1"}`,
 	}
-	if string(got) != payload {
-		t.Errorf("archive contents = %q, want %q", got, payload)
+	for path, body := range want {
+		got, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		if string(got) != body {
+			t.Errorf("%s = %q, want %q", path, got, body)
+		}
+	}
+
+	archive := filepath.Join(dir, "main.tar.gz")
+	if _, err := os.Stat(archive); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("expected %s to be removed, stat err = %v", archive, err)
 	}
 }
 
 func TestFetcher_Fetch_RespectsCacheDirOverride(t *testing.T) {
-	const payload = "tarball-bytes"
+	payload := tarGzBytes(t, map[string]string{
+		"cvelistV5-main/x.json": "{}",
+	})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(payload))
+		_, _ = w.Write(payload)
 	}))
 	defer srv.Close()
 
@@ -66,8 +87,8 @@ func TestFetcher_Fetch_RespectsCacheDirOverride(t *testing.T) {
 	if dir != want {
 		t.Errorf("dir = %q, want %q", dir, want)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "main.tar.gz")); err != nil {
-		t.Errorf("expected archive under override: %v", err)
+	if _, err := os.Stat(filepath.Join(dir, "cvelistV5-main", "x.json")); err != nil {
+		t.Errorf("expected extracted file: %v", err)
 	}
 }
 
@@ -85,4 +106,27 @@ func TestFetcher_Fetch_ReturnsErrorOnNon200(t *testing.T) {
 	if _, err := f.Fetch(context.Background()); err == nil {
 		t.Fatal("expected error, got nil")
 	}
+}
+
+func tarGzBytes(t *testing.T, entries map[string]string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	for name, body := range entries {
+		hdr := &tar.Header{Name: name, Mode: 0o644, Size: int64(len(body))}
+		if err := tw.WriteHeader(hdr); err != nil {
+			t.Fatalf("WriteHeader %s: %v", name, err)
+		}
+		if _, err := tw.Write([]byte(body)); err != nil {
+			t.Fatalf("Write %s: %v", name, err)
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatalf("close tar: %v", err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatalf("close gzip: %v", err)
+	}
+	return buf.Bytes()
 }
