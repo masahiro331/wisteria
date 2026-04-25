@@ -42,3 +42,16 @@ Fetchers expose `WithBaseURL` / `WithArchiveURL` and `WithHTTPClient` options so
 - Keep new source integrations behind the `Fetcher` interface so `cmd/fetch.go` stays uniform.
 - Branch-per-feature PRs: do not commit directly to `main`. For each functional unit of work, create a dedicated branch and open a PR.
 - No Claude attribution in git or GitHub artifacts: commit messages, PR titles, and PR bodies must not include `Co-Authored-By: Claude ...`, `🤖 Generated with [Claude Code]`, or any other Claude/Anthropic signature line. Enforced by the `commit-lint` workflow.
+
+## Codex review
+
+Use Codex as a second-opinion reviewer at two trigger points:
+
+1. **Stuck in implementation.** If three consecutive attempts at the same fix fail to make `make test` pass, or a non-trivial design decision needs a sanity check, hand the situation to Codex via the `codex:codex-rescue` subagent. Surface Codex's diagnosis to the user before continuing.
+2. **After a commit on a PR branch passes `make test`.** Run a Codex review automatically before pushing or opening a PR. Skip on `main` and on local-only branches that won't become PRs.
+
+Mechanics for trigger 2:
+
+- Input: the full branch diff (`git diff main...HEAD`) plus the most relevant design doc under `docs/design/` if the change implements one.
+- Caller: `codex:codex-rescue` subagent.
+- Disposition: relay Codex's findings to the user. Do not auto-apply fixes — the user decides whether to address each point in a follow-up commit.
