@@ -281,6 +281,8 @@ var sourcePriority = []string{
 
 ベンダー名は `<SourceKind>.<ecosystem>` 形式 (例: `osv.AlmaLinux`)。CVE5 は `cve.mitre` で固定。配列に含まれない source は末尾扱い。
 
+**現時点ではこの配列はドラフト**。`wisteria debug fields` で実データを観察し、出現する全 ecosystem を網羅した順序を [#22](https://github.com/masahiro331/wisteria/issues/22) で確定する。
+
 KEV / EPSS はベンダー / advisory ではなく exploit シグナルなので優先度配列には入れない。Description / Severity / Reference / Affected の merge には参加せず、UnifiedAdvisory の専用フィールド `KEV *KEVRecord` / `EPSS *EPSSScore` (§7) にだけ載せる。
 
 ### 8.2 References
@@ -521,7 +523,7 @@ internal/unified/testdata/
 
 ## 13. 実装タスク
 
-実装は GitHub Issues で管理する。本セクションは作業分割表 (本ファイルではない) として Milestone [Phase 1: Unified Advisory](https://github.com/masahiro331/wisteria/milestone/1) を参照する。Issue 一覧:
+実装は GitHub Issues で管理する。本セクションは作業分割表 (本ファイルではない) として Milestone [Unified Advisory pipeline](https://github.com/masahiro331/wisteria/milestone/1) を参照する。Issue 一覧:
 
 - [#13 unified: define OSV / CVE5 / KEV / EPSS schema types](https://github.com/masahiro331/wisteria/issues/13)
 - [#14 unified/walker: implement Stage 1 walker + PrimaryID resolution](https://github.com/masahiro331/wisteria/issues/14)
