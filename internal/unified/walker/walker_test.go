@@ -230,6 +230,38 @@ func TestIndex_RelativeSourcesRootKeepsRelativePaths(t *testing.T) {
 	}
 }
 
+func TestIndex_CVESymlinkIsIgnored(t *testing.T) {
+	// A symlink named like CVE-*.json must not be indexed: Stage 2
+	// reopens IndexEntry.Path via filepath.Join, so following such a
+	// link could read outside sourcesRoot. The OSV side already guards
+	// against this; the CVE side must mirror it.
+	root := t.TempDir()
+	writeFile(t, root, "cve/cvelistV5-main/cves/2024/0xxx/CVE-2024-0001.json", "{}")
+
+	outside := filepath.Join(root, "outside-secret.json")
+	if err := os.WriteFile(outside, []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "cve", "cvelistV5-main", "cves", "2024", "9xxx", "CVE-2024-9999.json")
+	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := walker.Index(context.Background(), root)
+	if err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+	if _, ok := got["CVE-2024-9999"]; ok {
+		t.Errorf("Index: symlink CVE-2024-9999 must not be indexed")
+	}
+	if got["CVE-2024-0001"] == nil {
+		t.Errorf("Index: real CVE-2024-0001 missing")
+	}
+}
+
 func TestIndex_CVEOutsideCvesSubtreeIsIgnored(t *testing.T) {
 	// upstream cvelistV5 ships test fixtures and helper scripts that may
 	// include CVE-*.json files outside cvelistV5-main/cves/. Only the

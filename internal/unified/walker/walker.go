@@ -174,6 +174,13 @@ func walkCVE(ctx context.Context, sourcesRoot string, out map[string][]unified.I
 		if !strings.HasPrefix(base, "CVE-") || !strings.HasSuffix(base, ".json") {
 			return nil
 		}
+		// Skip symlinks / sockets / fifos. Stage 2 reopens IndexEntry.Path
+		// via filepath.Join(sourcesRoot, Path), which would happily follow
+		// a CVE-named symlink out of the sources tree. Mirrors the OSV
+		// regular-file guard above.
+		if !d.Type().IsRegular() {
+			return nil
+		}
 		cveID := strings.TrimSuffix(base, ".json")
 
 		relFromSources, err := filepath.Rel(sourcesRoot, path)
