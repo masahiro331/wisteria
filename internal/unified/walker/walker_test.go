@@ -96,13 +96,13 @@ func TestIndex(t *testing.T) {
 			},
 		},
 		{
-			name: "OSV ecosystem with spaces is preserved verbatim in Source",
+			name: "OSV ecosystem with spaces is normalized (space -> _) in Source",
 			files: map[string]string{
 				"osv/Rocky Linux/RLSA-2024-1.json": `{"id":"RLSA-2024-1"}`,
 			},
 			want: map[string][]entryWant{
 				"RLSA-2024-1": {
-					{kind: unified.SourceOSV, source: "Rocky Linux", sourceID: "RLSA-2024-1", relPath: "osv/Rocky Linux/RLSA-2024-1.json"},
+					{kind: unified.SourceOSV, source: "Rocky_Linux", sourceID: "RLSA-2024-1", relPath: "osv/Rocky Linux/RLSA-2024-1.json"},
 				},
 			},
 		},

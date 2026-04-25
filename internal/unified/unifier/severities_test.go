@@ -10,7 +10,7 @@ import (
 func TestMergeSeverities(t *testing.T) {
 	provCVE := unified.Provenance{Kind: unified.SourceCVE, Path: "cve/x.json", ID: "CVE-2024-0001"}
 	provAlma := unified.Provenance{Kind: unified.SourceOSV, Path: "osv/AlmaLinux/ALSA-1.json", ID: "ALSA-1"}
-	provGit := unified.Provenance{Kind: unified.SourceOSV, Path: "osv/GitHub Reviewed/GHSA-1.json", ID: "GHSA-1"}
+	provGit := unified.Provenance{Kind: unified.SourceOSV, Path: "osv/GitHub Reviewed/GHSA-1.json", ID: "GHSA-1"} // Path stays verbatim; tag below is normalized
 
 	tests := []struct {
 		name    string
@@ -74,8 +74,8 @@ func TestMergeSeverities(t *testing.T) {
 				{Type: "CVSS_V2", Vector: "v2", Score: "7.5", From: provCVE},
 				{Type: "CVSS_V4", Vector: "v4", Score: "9.0", From: provAlma},
 			},
-			sources: []string{"osv.GitHub Reviewed", "cve.mitre", "osv.AlmaLinux"},
-			// cve.mitre (rank 0) → osv.AlmaLinux (rank 2 in our draft) → osv.GitHub Reviewed (later)
+			sources: []string{"osv.GitHub_Reviewed", "cve.mitre", "osv.AlmaLinux"},
+			// cve.mitre (rank 0) → osv.AlmaLinux (rank 2) → osv.GitHub_Reviewed (later)
 			want: []unified.Severity{
 				{Type: "CVSS_V2", Vector: "v2", Score: "7.5", From: provCVE},
 				{Type: "CVSS_V4", Vector: "v4", Score: "9.0", From: provAlma},

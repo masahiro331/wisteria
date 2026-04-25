@@ -65,7 +65,7 @@ KEV / EPSS は walker / unifier (Stage 1-3) では扱わない。Stage 4 (Annota
 ```
 
 - `<year>` は CVE-ID (`CVE-YYYY-NNNN`) から抽出。1 ディレクトリのファイル数を抑え FS / ツール (ls, grep) を実用範囲に保つ。
-- `<ecosystem>` は OSV の ecosystem 名そのまま (例: `AlmaLinux`、`Go`、`PyPI`)。スペースは `_` に置換 (`Rocky Linux` → `Rocky_Linux`)。
+- `<ecosystem>` は walker が `IndexEntry.Source` に格納する正規化済み値 (例: `AlmaLinux`、`Go`、`PyPI`、`Rocky_Linux`)。upstream の OSV ディレクトリ名のうちスペースのみ `_` に置換し、それ以外は verbatim。置換は walker が一度だけ行うので、writer / unifier 側で再正規化しない。
 - KEV は単一 JSON ファイル (`known_exploited_vulnerabilities.json`)。fetcher は archive を扱わず GET → 保存のみ。
 - EPSS は単一 gzip CSV (`epss_scores-current.csv.gz`) を取得し、download 時に gzip 展開して plain CSV (`epss_scores-current.csv`) として保存する。Stage 4 annotator は `encoding/csv` だけで読める。
 - 1 PrimaryID = 1 ファイル。毎回フル再構築 (§5.1)。
@@ -278,14 +278,14 @@ EPSS は CSV 固定 3 列 (`cve, epss, percentile`) で構造が決まりきっ�
 // internal/unified/unifier/priority.go
 var sourcePriority = []string{
     "cve.mitre",            // CVE5 CNA (≒ ベンダー本人) を最優先
-    "osv.RedHat",
+    "osv.Red_Hat",
     "osv.AlmaLinux",
-    "osv.Rocky Linux",
+    "osv.Rocky_Linux",
     "osv.SUSE",
     "osv.Ubuntu",
     "osv.Debian",
     "osv.Alpine",
-    "osv.GitHub",           // GHSA
+    "osv.GitHub_Reviewed",  // GHSA
     "osv.PyPI",
     "osv.npm",
     "osv.Go",
@@ -293,7 +293,7 @@ var sourcePriority = []string{
 }
 ```
 
-ベンダー名は `<SourceKind>.<ecosystem>` 形式 (例: `osv.AlmaLinux`)。CVE5 は `cve.mitre` で固定。配列に含まれない source は末尾扱い。
+ベンダー名は `<SourceKind>.<ecosystem>` 形式 (例: `osv.AlmaLinux`)。`<ecosystem>` は walker が `IndexEntry.Source` に格納する正規化済み値 (スペース → `_`) をそのまま使う (例: OSV ディレクトリ `Red Hat` → tag `osv.Red_Hat`)。CVE5 は `cve.mitre` で固定。配列に含まれない source は末尾扱い。
 
 **現時点ではこの配列はドラフト**。`wisteria debug fields` で実データを観察し、出現する全 ecosystem を網羅した順序を [#22](https://github.com/masahiro331/wisteria/issues/22) で確定する。
 
@@ -415,7 +415,7 @@ func Write(ctx context.Context, cacheDir string, records []unified.UnifiedAdviso
 
 - PrimaryID の形式判定:
   - `CVE-YYYY-NNNN` 正規表現にマッチ → cve バケット、`<year>` は YYYY を抽出
-  - それ以外 → standalone バケット、`<ecosystem>` は最優先 Provenance の Source。スペースは `_` に置換
+  - それ以外 → standalone バケット、`<ecosystem>` は最優先 Provenance の Source をそのまま使う (walker 側で正規化済みなので writer での再置換は不要)
 - 出力ディレクトリは事前に `MkdirAll`
 - temp file → rename でファイル単位 atomic write
 - ファイル名は PrimaryID をそのまま使う。FS で危険な文字 (`/`, `:`) は `_` に置換 (例: `ALBA-2019:0973` → `ALBA-2019_0973.json`)
