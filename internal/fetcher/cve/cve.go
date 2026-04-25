@@ -10,10 +10,10 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/masahiro331/wisteria/internal/cache"
-	"github.com/masahiro331/wisteria/internal/extract"
-	"github.com/masahiro331/wisteria/internal/httpx"
-	"github.com/masahiro331/wisteria/internal/progress"
+	"github.com/masahiro331/wisteria/internal/fetcher/progress"
+	"github.com/masahiro331/wisteria/internal/x/archive"
+	"github.com/masahiro331/wisteria/internal/x/cachedir"
+	xhttp "github.com/masahiro331/wisteria/internal/x/http"
 )
 
 const (
@@ -37,7 +37,7 @@ func WithCacheDir(dir string) Option { return func(f *Fetcher) { f.cacheDir = di
 func WithProgress(t *progress.Tracker) Option { return func(f *Fetcher) { f.progress = t } }
 
 // WithRetries sets how many times each HTTP request is attempted before
-// giving up. Values <= 0 fall back to the httpx default.
+// giving up. Values <= 0 fall back to the xhttp default.
 func WithRetries(n int) Option {
 	return func(f *Fetcher) {
 		if n > 0 {
@@ -52,7 +52,7 @@ type Fetcher struct {
 	client     *http.Client
 	cacheDir   string
 	progress   *progress.Tracker
-	retry      httpx.RetryOptions
+	retry      xhttp.RetryOptions
 }
 
 // New constructs a Fetcher with optional overrides.
@@ -70,7 +70,7 @@ func (f *Fetcher) Name() string { return sourceName }
 // Fetch downloads the archive into the cache directory and returns the
 // directory root.
 func (f *Fetcher) Fetch(ctx context.Context) (string, error) {
-	dir, err := cache.Dir(f.cacheDir, sourceName)
+	dir, err := cachedir.Dir(f.cacheDir, sourceName)
 	if err != nil {
 		return "", err
 	}
@@ -79,7 +79,7 @@ func (f *Fetcher) Fetch(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	resp, err := httpx.DoWithRetry(ctx, f.client, req, f.retry)
+	resp, err := xhttp.DoWithRetry(ctx, f.client, req, f.retry)
 	if err != nil {
 		return "", err
 	}
@@ -94,7 +94,7 @@ func (f *Fetcher) Fetch(ctx context.Context) (string, error) {
 	}
 	f.progress.Wait()
 
-	if err := extract.TarGz(dest, dir); err != nil {
+	if err := archive.TarGz(dest, dir); err != nil {
 		return "", fmt.Errorf("extract %s: %w", dest, err)
 	}
 	if err := os.Remove(dest); err != nil {

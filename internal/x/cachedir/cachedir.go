@@ -1,4 +1,7 @@
-package cache
+// Package cachedir resolves the local directory wisteria writes downloaded
+// data into. It is path resolution only — there is no eviction or in-memory
+// tier; the name reflects the on-disk cache location, not a cache layer API.
+package cachedir
 
 import (
 	"fmt"
@@ -8,11 +11,11 @@ import (
 
 const (
 	appName = "wisteria"
-	// EnvCacheDir lets users override the cache root via environment.
+	// EnvCacheDir lets users override the cache directory root via environment.
 	EnvCacheDir = "WISTERIA_CACHE_DIR"
 )
 
-// Root resolves the wisteria cache root using this precedence:
+// Root resolves the wisteria cache directory root using this precedence:
 //  1. override (typically a CLI flag value)
 //  2. WISTERIA_CACHE_DIR environment variable
 //  3. os.UserCacheDir()/wisteria

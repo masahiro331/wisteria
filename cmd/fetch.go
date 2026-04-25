@@ -9,7 +9,7 @@ import (
 	"github.com/masahiro331/wisteria/internal/fetcher"
 	"github.com/masahiro331/wisteria/internal/fetcher/cve"
 	"github.com/masahiro331/wisteria/internal/fetcher/osv"
-	"github.com/masahiro331/wisteria/internal/progress"
+	"github.com/masahiro331/wisteria/internal/fetcher/progress"
 )
 
 // fetchOptions bundles common per-invocation knobs read from CLI flags.
