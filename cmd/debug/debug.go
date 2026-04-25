@@ -18,5 +18,6 @@ func NewCmd() *cobra.Command {
 	}
 	c.AddCommand(newIndexCmd())
 	c.AddCommand(newUnifyCmd())
+	c.AddCommand(newAnnotateCmd())
 	return c
 }

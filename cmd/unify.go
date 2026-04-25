@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/masahiro331/wisteria/internal/unified/annotator"
 	"github.com/masahiro331/wisteria/internal/unified/unifier"
 	"github.com/masahiro331/wisteria/internal/unified/walker"
 	"github.com/masahiro331/wisteria/internal/unified/writer"
@@ -23,8 +24,8 @@ import (
 // streamed straight to disk so memory stays bounded by the worker pool
 // size, not by the total record count (currently ~900k). --concurrency
 // controls both the walker pool and the unify→write fan-out (default
-// 4× NumCPU; I/O-bound). Stage 4 (annotator.AnnotateKEV /
-// AnnotateEPSS) is added once #20 / #21 land.
+// 4× NumCPU; I/O-bound). Stage 4 (annotator.AnnotateKEV →
+// AnnotateEPSS) attaches signal data after Stage 3.
 func newUnifyCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "unify",
@@ -99,6 +100,24 @@ func newUnifyCmd() *cobra.Command {
 			}
 			fmt.Fprintf(out, "stage 2+3 (merge+write): %s\n",
 				time.Since(t1).Round(time.Millisecond))
+
+			// Stage 4: annotate. KEV first, then EPSS — order doesn't
+			// matter functionally (the two write disjoint fields), but
+			// running KEV (~1500 entries) first surfaces missing-target
+			// issues quickly before the larger EPSS sweep.
+			t2 := time.Now()
+			if err := annotator.AnnotateKEV(ctx, sourcesRoot, outDir); err != nil {
+				return fmt.Errorf("annotator.AnnotateKEV: %w", err)
+			}
+			fmt.Fprintf(out, "stage 4 (annotate kev):  %s\n",
+				time.Since(t2).Round(time.Millisecond))
+
+			t3 := time.Now()
+			if err := annotator.AnnotateEPSS(ctx, sourcesRoot, outDir); err != nil {
+				return fmt.Errorf("annotator.AnnotateEPSS: %w", err)
+			}
+			fmt.Fprintf(out, "stage 4 (annotate epss): %s\n",
+				time.Since(t3).Round(time.Millisecond))
 
 			fmt.Fprintf(out, "total: %s; wrote %d advisories to %s\n",
 				time.Since(t0).Round(time.Millisecond), len(index), outDir)
