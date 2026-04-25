@@ -33,12 +33,12 @@ type Provenance struct {
 	ID   string     `json:"id"`
 }
 
-// IndexEntry is one row of Stage 1's output: enough to re-open the file
-// in Stage 2 (AbsPath), enough to record Provenance (RelPath + SourceID),
-// and enough to route writes in Stage 3 (Kind + Source).
+// IndexEntry is one row of Stage 1's output. Path is relative to the
+// sourcesRoot the walker was given — Stage 2 reopens the file by joining
+// sourcesRoot with Path, and the same value flows straight into
+// Provenance.Path. Kind + Source route writes in Stage 3.
 type IndexEntry struct {
-	AbsPath  string
-	RelPath  string
+	Path     string
 	Kind     SourceKind
 	Source   string
 	SourceID string

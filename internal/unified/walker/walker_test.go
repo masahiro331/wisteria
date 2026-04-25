@@ -143,13 +143,15 @@ func TestIndex(t *testing.T) {
 						t.Errorf("PrimaryID %q entry %d: got %q, want %q", pid, i, gotSig[i], wantSig[i])
 					}
 				}
-				// AbsPath must point to a real file under root.
+				// Path is relative to sourcesRoot; joining must yield a
+				// real file. This catches both absolute-path leaks and
+				// missing-file regressions in one check.
 				for _, e := range gotEntries {
-					if !filepath.IsAbs(e.AbsPath) {
-						t.Errorf("PrimaryID %q: AbsPath %q is not absolute", pid, e.AbsPath)
+					if filepath.IsAbs(e.Path) {
+						t.Errorf("PrimaryID %q: Path %q must be relative to sourcesRoot", pid, e.Path)
 					}
-					if _, err := os.Stat(e.AbsPath); err != nil {
-						t.Errorf("PrimaryID %q: AbsPath %q does not exist: %v", pid, e.AbsPath, err)
+					if _, err := os.Stat(filepath.Join(root, e.Path)); err != nil {
+						t.Errorf("PrimaryID %q: joined path does not exist: %v", pid, err)
 					}
 				}
 			}
@@ -202,6 +204,32 @@ func TestIndex_NonJSONFilesUnderOSVAreIgnored(t *testing.T) {
 	}
 }
 
+func TestIndex_RelativeSourcesRootKeepsRelativePaths(t *testing.T) {
+	// Path must always be relative to sourcesRoot, even when sourcesRoot
+	// itself is given as a relative path. This is the regression test for
+	// the original AbsPath/RelPath split (which leaked the caller's CWD
+	// into AbsPath when sourcesRoot was relative).
+	abs := t.TempDir()
+	writeFile(t, abs, "osv/PyPI/PYSEC-2024-1.json", `{"id":"PYSEC-2024-1"}`)
+
+	t.Chdir(filepath.Dir(abs))
+
+	got, err := walker.Index(context.Background(), filepath.Base(abs))
+	if err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+	entries := got["PYSEC-2024-1"]
+	if len(entries) != 1 {
+		t.Fatalf("got %d entries, want 1", len(entries))
+	}
+	if filepath.IsAbs(entries[0].Path) {
+		t.Errorf("Path %q must be relative", entries[0].Path)
+	}
+	if entries[0].Path != filepath.Join("osv", "PyPI", "PYSEC-2024-1.json") {
+		t.Errorf("Path = %q, want osv/PyPI/PYSEC-2024-1.json", entries[0].Path)
+	}
+}
+
 func TestIndex_CVEFilenameWithoutCVEPrefixIsIgnored(t *testing.T) {
 	// delta.json, deltaLog.json etc. live alongside CVE-*.json under the
 	// upstream cvelistV5 repo; they are not advisory records and must not
@@ -234,7 +262,7 @@ func keys(m map[string][]unified.IndexEntry) []string {
 func signatures(entries []unified.IndexEntry) []string {
 	out := make([]string, len(entries))
 	for i, e := range entries {
-		out[i] = string(e.Kind) + "|" + e.Source + "|" + e.SourceID + "|" + e.RelPath
+		out[i] = string(e.Kind) + "|" + e.Source + "|" + e.SourceID + "|" + e.Path
 	}
 	return out
 }

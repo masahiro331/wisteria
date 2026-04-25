@@ -127,8 +127,7 @@ func walkOSV(ctx context.Context, sourcesRoot string, out map[string][]unified.I
 		}
 
 		entry := unified.IndexEntry{
-			AbsPath:  path,
-			RelPath:  relFromSources,
+			Path:     relFromSources,
 			Kind:     unified.SourceOSV,
 			Source:   ecosystem,
 			SourceID: rec.ID,
@@ -178,8 +177,7 @@ func walkCVE(ctx context.Context, sourcesRoot string, out map[string][]unified.I
 			return fmt.Errorf("walker: rel sources %s: %w", path, err)
 		}
 		out[cveID] = append(out[cveID], unified.IndexEntry{
-			AbsPath:  path,
-			RelPath:  relFromSources,
+			Path:     relFromSources,
 			Kind:     unified.SourceCVE,
 			Source:   "",
 			SourceID: cveID,
