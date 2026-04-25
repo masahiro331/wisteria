@@ -141,11 +141,16 @@ func walkOSV(ctx context.Context, sourcesRoot string, out map[string][]unified.I
 	close(results)
 	mergeWG.Wait()
 
-	if walkErr != nil {
-		return walkErr
-	}
+	// Prefer groupErr: when a worker returns a parse error the errgroup
+	// cancels gctx, which then surfaces as context.Canceled inside the
+	// WalkDir callback (osvWalkStep checks gctx). Returning walkErr
+	// first would mask the real "walker: parse foo.json: ..." with a
+	// generic "context canceled" and lose the file path.
 	if groupErr != nil {
 		return groupErr
+	}
+	if walkErr != nil {
+		return walkErr
 	}
 
 	// Restore lexical order: WalkDir dispatched in path order but workers
