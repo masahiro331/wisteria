@@ -1,5 +1,5 @@
-// Package httpx contains small HTTP utilities shared by fetchers.
-package httpx
+// Package xhttp contains small HTTP utilities shared by fetchers.
+package xhttp
 
 import (
 	"context"

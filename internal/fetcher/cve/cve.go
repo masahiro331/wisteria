@@ -13,7 +13,7 @@ import (
 	"github.com/masahiro331/wisteria/internal/fetcher/progress"
 	"github.com/masahiro331/wisteria/internal/x/archive"
 	"github.com/masahiro331/wisteria/internal/x/cachedir"
-	"github.com/masahiro331/wisteria/internal/x/httpx"
+	xhttp "github.com/masahiro331/wisteria/internal/x/http"
 )
 
 const (
@@ -37,7 +37,7 @@ func WithCacheDir(dir string) Option { return func(f *Fetcher) { f.cacheDir = di
 func WithProgress(t *progress.Tracker) Option { return func(f *Fetcher) { f.progress = t } }
 
 // WithRetries sets how many times each HTTP request is attempted before
-// giving up. Values <= 0 fall back to the httpx default.
+// giving up. Values <= 0 fall back to the xhttp default.
 func WithRetries(n int) Option {
 	return func(f *Fetcher) {
 		if n > 0 {
@@ -52,7 +52,7 @@ type Fetcher struct {
 	client     *http.Client
 	cacheDir   string
 	progress   *progress.Tracker
-	retry      httpx.RetryOptions
+	retry      xhttp.RetryOptions
 }
 
 // New constructs a Fetcher with optional overrides.
@@ -79,7 +79,7 @@ func (f *Fetcher) Fetch(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	resp, err := httpx.DoWithRetry(ctx, f.client, req, f.retry)
+	resp, err := xhttp.DoWithRetry(ctx, f.client, req, f.retry)
 	if err != nil {
 		return "", err
 	}
