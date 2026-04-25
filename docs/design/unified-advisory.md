@@ -169,9 +169,10 @@ type Provenance struct {
 }
 
 // IndexEntry は Stage 1 が 1 ファイル分について返す索引情報。
+// Path は sourcesRoot からの相対 path。Stage 2 は filepath.Join(sourcesRoot, Path)
+// でファイルを再オープンし、同じ値が Provenance.Path に入る。
 type IndexEntry struct {
-    AbsPath  string     // Stage 2 が読む実パス
-    RelPath  string     // sourcesRoot からの相対 path (Provenance.Path に入る)
+    Path     string     // sourcesRoot からの相対 path
     Kind     SourceKind // osv | cve
     Source   string     // OSV の ecosystem 名 (例: "AlmaLinux", "PyPI")
     SourceID string     // OSV の id、CVE5 のファイル名 CVE-ID
