@@ -81,7 +81,7 @@ func TestUnmarshal_FullCNA(t *testing.T) {
 	if len(cna.Metrics) != 1 || cna.Metrics[0].CVSSv31 == nil {
 		t.Fatalf("Metrics = %#v", cna.Metrics)
 	}
-	if cna.Metrics[0].CVSSv31.BaseScore != 10.0 {
+	if cna.Metrics[0].CVSSv31.BaseScore == nil || *cna.Metrics[0].CVSSv31.BaseScore != 10.0 {
 		t.Errorf("BaseScore = %v", cna.Metrics[0].CVSSv31.BaseScore)
 	}
 	if cna.Metrics[0].CVSSv31.VectorString == "" {
@@ -125,10 +125,10 @@ func TestUnmarshal_AcceptsCVSSv30AndV40(t *testing.T) {
 	if len(m) != 2 {
 		t.Fatalf("Metrics len = %d", len(m))
 	}
-	if m[0].CVSSv30 == nil || m[0].CVSSv30.BaseScore != 7.5 {
+	if m[0].CVSSv30 == nil || m[0].CVSSv30.BaseScore == nil || *m[0].CVSSv30.BaseScore != 7.5 {
 		t.Errorf("CVSSv30 = %#v", m[0].CVSSv30)
 	}
-	if m[1].CVSSv40 == nil || m[1].CVSSv40.BaseScore != 8.7 {
+	if m[1].CVSSv40 == nil || m[1].CVSSv40.BaseScore == nil || *m[1].CVSSv40.BaseScore != 8.7 {
 		t.Errorf("CVSSv40 = %#v", m[1].CVSSv40)
 	}
 }

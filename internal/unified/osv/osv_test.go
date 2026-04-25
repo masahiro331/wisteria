@@ -3,6 +3,7 @@ package osv
 import (
 	"encoding/json"
 	"testing"
+	"time"
 )
 
 func TestUnmarshal_PYSEC_MultiAlias(t *testing.T) {
@@ -85,6 +86,77 @@ func TestUnmarshal_AlmaLinux_NoAliases(t *testing.T) {
 	}
 	if len(got.Aliases) != 0 {
 		t.Errorf("Aliases should be empty when absent, got %v", got.Aliases)
+	}
+}
+
+func TestUnmarshal_FullTopLevelMetadata(t *testing.T) {
+	const body = `{
+		"schema_version": "1.7.3",
+		"id": "ALPINE-CVE-2009-3895",
+		"published": "2009-11-20T18:30:00.327Z",
+		"modified": "2025-11-19T05:57:42.162407Z",
+		"withdrawn": "2025-11-20T00:00:00Z",
+		"upstream": ["CVE-2009-3895"],
+		"related": ["GHSA-xyz"],
+		"credits": [
+			{"name": "Checkmarx", "contact": ["a@b", "https://example"], "type": "FINDER"}
+		],
+		"database_specific": {"iocs": {"domains": ["example.com"]}}
+	}`
+	var got Record
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if got.SchemaVersion != "1.7.3" {
+		t.Errorf("SchemaVersion = %q", got.SchemaVersion)
+	}
+	wantPub := time.Date(2009, 11, 20, 18, 30, 0, 327000000, time.UTC)
+	if !got.Published.Equal(wantPub) {
+		t.Errorf("Published = %s, want %s", got.Published, wantPub)
+	}
+	if got.Withdrawn.IsZero() {
+		t.Errorf("Withdrawn should be set")
+	}
+	if len(got.Upstream) != 1 || got.Upstream[0] != "CVE-2009-3895" {
+		t.Errorf("Upstream = %v", got.Upstream)
+	}
+	if len(got.Related) != 1 {
+		t.Errorf("Related = %v", got.Related)
+	}
+	if len(got.Credits) != 1 || got.Credits[0].Name != "Checkmarx" || got.Credits[0].Type != "FINDER" {
+		t.Errorf("Credits = %#v", got.Credits)
+	}
+	if len(got.Credits[0].Contact) != 2 {
+		t.Errorf("Contact = %v", got.Credits[0].Contact)
+	}
+	if len(got.DatabaseSpecific) == 0 {
+		t.Errorf("DatabaseSpecific raw should be populated")
+	}
+}
+
+func TestUnmarshal_AffectedSeverityAndRangeDatabaseSpecific(t *testing.T) {
+	const body = `{
+		"id": "x",
+		"affected": [{
+			"package": {"ecosystem": "PyPI", "name": "p"},
+			"severity": [{"type": "CVSS_V3", "score": "CVSS:3.1/AV:N"}],
+			"ranges": [{
+				"type": "ECOSYSTEM",
+				"events": [{"introduced": "0"}],
+				"database_specific": {"source": "https://example/x"}
+			}]
+		}]
+	}`
+	var got Record
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	a := got.Affected[0]
+	if len(a.Severity) != 1 || a.Severity[0].Type != "CVSS_V3" {
+		t.Errorf("Affected[0].Severity = %#v", a.Severity)
+	}
+	if len(a.Ranges[0].DatabaseSpecific) == 0 {
+		t.Errorf("Range.DatabaseSpecific raw should be populated")
 	}
 }
 

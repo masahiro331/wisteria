@@ -247,12 +247,16 @@ type UnifiedAdvisory struct {
 }
 ```
 
-OSV / CVE / KEV / EPSS の struct は公式 schema から Phase 1 で必要なフィールドだけ定義する。
+OSV / CVE / KEV の struct は **upstream の全フィールドを typed field として明示する** (1 byte も落とさない方針)。`json.RawMessage` の catch-all は使わない。upstream schema に新フィールドが入った場合は struct を追加して対応する。検証は `tmp/check` (typed parse → re-marshal を interface{} parse → re-marshal と diff) を都度回し、漏れがゼロであることを確認する。
+
+EPSS は CSV 固定 3 列 (`cve, epss, percentile`) で構造が決まりきっているため typed のみ。
+
+直接 typed access するのは下記。これ以外のフィールドも全て typed として保持されているが、パイプラインが値を見るのは下記に限る:
 
 - OSV: `id`、`aliases`、`summary`、`details`、`affected[]`、`references[]`、`severity[]`
 - CVE5: `cveMetadata.cveId`、`containers.cna.descriptions[]`、`containers.cna.affected[]`、`containers.cna.references[]`、`containers.cna.metrics[]`
 - KEV: catalog top-level (`title`、`catalogVersion`、`dateReleased`、`count`)、`vulnerabilities[]` 各エントリの全フィールド
-- EPSS: header コメント行 (`#model_version:..,score_date:..`)、CSV ヘッダ (`cve,epss,percentile`)、各データ行
+- EPSS: header コメント行 (`#model_version:..,score_date:..`) はパース時に skip。CSV body の各データ行を `Score{CVE, EPSS, Percentile}` として保持
 
 ## 8. マージルール
 
