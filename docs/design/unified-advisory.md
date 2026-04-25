@@ -247,12 +247,25 @@ type UnifiedAdvisory struct {
 }
 ```
 
-OSV / CVE / KEV / EPSS の struct は公式 schema から Phase 1 で必要なフィールドだけ定義する。
+OSV / CVE / KEV の struct は **upstream の全フィールドを typed field として明示する** (1 byte も落とさない方針)。`json.RawMessage` の catch-all は使わない。upstream schema に新フィールドが入った場合は struct を追加して対応する。検証は `debug/schema-coverage` (typed parse → re-marshal を interface{} parse → re-marshal と diff、upstream の `null` / `[]` / `{}` / Go zero time string は absent と等価扱い、最大 3 件のサンプル file path を表示) を都度回し、漏れがゼロであることを確認する。
+
+例外として、以下のフィールドは upstream で構造が一定でないため `json.RawMessage` 維持を許容する。新規追加時は本リスト + 該当 schema 定義のコメントに理由を記録する:
+
+- `osv.Record.DatabaseSpecific` (`database_specific`): OSV schema が "free-form JSON object" として明示的に定義する DB 固有 catch-all
+- `osv.Affected.EcosystemSpecific` (`affected[].ecosystem_specific`) / `osv.Affected.DatabaseSpecific` (`affected[].database_specific`): OSV schema が同様に free-form として定義 (ecosystem ごとに任意 schema)
+- `osv.Range.DatabaseSpecific` (`affected[].ranges[].database_specific`): Range レベルでも同じ catch-all を持つ
+- `cve.Container.Source` (`containers.{cna,adp}[].source`): CVE5 spec が `additionalProperties` 相当で free-form。実データでも `{"discovery": "INTERNAL"}` 系と `{"lang": "en", "value": "Reporter Name"}` 系が混在し、安定した typed shape を引けない
+- `cve.Container.XGenerator` / `XLegacyV4Record` / `XAffectedList` / `XRedhatCweChain` / `XConverterErrors`: upstream `x_*` 拡張で publisher 固有
+- `cve.MetricOther.Content`: SSVC など metric ごとに任意 schema
+
+EPSS は CSV 固定 3 列 (`cve, epss, percentile`) で構造が決まりきっているため typed のみ。
+
+直接 typed access するのは下記。これ以外のフィールドも全て typed として保持されているが、パイプラインが値を見るのは下記に限る:
 
 - OSV: `id`、`aliases`、`summary`、`details`、`affected[]`、`references[]`、`severity[]`
 - CVE5: `cveMetadata.cveId`、`containers.cna.descriptions[]`、`containers.cna.affected[]`、`containers.cna.references[]`、`containers.cna.metrics[]`
 - KEV: catalog top-level (`title`、`catalogVersion`、`dateReleased`、`count`)、`vulnerabilities[]` 各エントリの全フィールド
-- EPSS: header コメント行 (`#model_version:..,score_date:..`)、CSV ヘッダ (`cve,epss,percentile`)、各データ行
+- EPSS: header コメント行 (`#model_version:..,score_date:..`) はパース時に skip。CSV body の各データ行を `Score{CVE, EPSS, Percentile}` として保持
 
 ## 8. マージルール
 
