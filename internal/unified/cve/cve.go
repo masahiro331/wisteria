@@ -8,8 +8,49 @@ package cve
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 )
+
+// Timestamp wraps time.Time so non-strict CVE5 timestamps parse cleanly.
+// CVE5 spec mandates RFC3339, but a few records in the wild emit
+// "2006-01-02T15:04:05" without a timezone; assume UTC for those.
+type Timestamp struct {
+	time.Time
+}
+
+var timestampLayouts = []string{
+	time.RFC3339Nano,
+	time.RFC3339,
+	"2006-01-02T15:04:05",
+}
+
+// UnmarshalJSON parses one of the layouts in timestampLayouts; absent or
+// empty values yield the zero time without error.
+func (t *Timestamp) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(string(b), `"`)
+	if s == "" || s == "null" {
+		t.Time = time.Time{}
+		return nil
+	}
+	for _, layout := range timestampLayouts {
+		if parsed, err := time.Parse(layout, s); err == nil {
+			t.Time = parsed
+			return nil
+		}
+	}
+	return fmt.Errorf("cve timestamp %q: no known layout matched", s)
+}
+
+// MarshalJSON emits RFC3339Nano; the zero value emits null so re-marshal of
+// an absent field stays absent.
+func (t Timestamp) MarshalJSON() ([]byte, error) {
+	if t.IsZero() {
+		return []byte("null"), nil
+	}
+	return json.Marshal(t.Format(time.RFC3339Nano))
+}
 
 // Record is one CVE5 JSON file.
 type Record struct {
@@ -27,10 +68,10 @@ type CVEMetadata struct {
 	RequesterUserID   string    `json:"requesterUserId,omitempty"`
 	Serial            int       `json:"serial,omitempty"`
 	State             string    `json:"state,omitempty"`
-	DateReserved      time.Time `json:"dateReserved,omitzero"`
-	DatePublished     time.Time `json:"datePublished,omitzero"`
-	DateUpdated       time.Time `json:"dateUpdated,omitzero"`
-	DateRejected      time.Time `json:"dateRejected,omitzero"`
+	DateReserved      Timestamp `json:"dateReserved,omitzero"`
+	DatePublished     Timestamp `json:"datePublished,omitzero"`
+	DateUpdated       Timestamp `json:"dateUpdated,omitzero"`
+	DateRejected      Timestamp `json:"dateRejected,omitzero"`
 }
 
 // Containers groups per-actor sub-records.
@@ -48,33 +89,63 @@ type ADP = Container
 
 // Container is the shared shape between CNA and ADP entries.
 type Container struct {
-	ProviderMetadata *ProviderMetadata `json:"providerMetadata,omitempty"`
-	Title            string            `json:"title,omitempty"`
-	Source           json.RawMessage   `json:"source,omitempty"`
-	DatePublic       time.Time         `json:"datePublic,omitzero"`
-	DateAssigned     time.Time         `json:"dateAssigned,omitzero"`
-	Descriptions     []Description     `json:"descriptions,omitempty"`
-	Affected         []Affected        `json:"affected,omitempty"`
-	References       []Reference       `json:"references,omitempty"`
-	Metrics          []Metric          `json:"metrics,omitempty"`
-	ProblemTypes     []ProblemType     `json:"problemTypes,omitempty"`
-	Solutions        []Description     `json:"solutions,omitempty"`
-	Workarounds      []Description     `json:"workarounds,omitempty"`
-	Exploits         []Description     `json:"exploits,omitempty"`
-	Configurations   []Description     `json:"configurations,omitempty"`
-	Impacts          []Impact          `json:"impacts,omitempty"`
-	Credits          []Credit          `json:"credits,omitempty"`
-	Timeline         []TimelineEntry   `json:"timeline,omitempty"`
-	Tags             []string          `json:"tags,omitempty"`
-	RejectedReasons  []Description     `json:"rejectedReasons,omitempty"`
-	ReplacedBy       []string          `json:"replacedBy,omitempty"`
-	CPEApplicability json.RawMessage   `json:"cpeApplicability,omitempty"`
-	XGenerator       json.RawMessage   `json:"x_generator,omitempty"`
-	XLegacyV4Record  json.RawMessage   `json:"x_legacyV4Record,omitempty"`
-	XAffectedList    json.RawMessage   `json:"x_affectedList,omitempty"`
-	XRedhatCweChain  json.RawMessage   `json:"x_redhatCweChain,omitempty"`
-	XConverterErrors json.RawMessage   `json:"x_ConverterErrors,omitempty"`
-	TaxonomyMappings []TaxonomyMapping `json:"taxonomyMappings,omitempty"`
+	ProviderMetadata *ProviderMetadata  `json:"providerMetadata,omitempty"`
+	Title            string             `json:"title,omitempty"`
+	Source           json.RawMessage    `json:"source,omitempty"`
+	DatePublic       Timestamp          `json:"datePublic,omitzero"`
+	DateAssigned     Timestamp          `json:"dateAssigned,omitzero"`
+	Descriptions     []Description      `json:"descriptions,omitempty"`
+	Affected         []Affected         `json:"affected,omitempty"`
+	References       []Reference        `json:"references,omitempty"`
+	Metrics          []Metric           `json:"metrics,omitempty"`
+	ProblemTypes     []ProblemType      `json:"problemTypes,omitempty"`
+	Solutions        []Description      `json:"solutions,omitempty"`
+	Workarounds      []Description      `json:"workarounds,omitempty"`
+	Exploits         []Description      `json:"exploits,omitempty"`
+	Configurations   []Description      `json:"configurations,omitempty"`
+	Impacts          []Impact           `json:"impacts,omitempty"`
+	Credits          []Credit           `json:"credits,omitempty"`
+	Timeline         []TimelineEntry    `json:"timeline,omitempty"`
+	Tags             []string           `json:"tags,omitempty"`
+	RejectedReasons  []Description      `json:"rejectedReasons,omitempty"`
+	ReplacedBy       []string           `json:"replacedBy,omitempty"`
+	CPEApplicability []CPEApplicability `json:"cpeApplicability,omitempty"`
+	XGenerator       json.RawMessage    `json:"x_generator,omitempty"`
+	XLegacyV4Record  json.RawMessage    `json:"x_legacyV4Record,omitempty"`
+	XAffectedList    json.RawMessage    `json:"x_affectedList,omitempty"`
+	XRedhatCweChain  json.RawMessage    `json:"x_redhatCweChain,omitempty"`
+	XConverterErrors json.RawMessage    `json:"x_ConverterErrors,omitempty"`
+	XADPType         string             `json:"x_adpType,omitempty"`
+	XYear            string             `json:"x_year,omitempty"`
+	TaxonomyMappings []TaxonomyMapping  `json:"taxonomyMappings,omitempty"`
+}
+
+// CPEApplicability is one applicability entry (NVD CPE matching tree).
+type CPEApplicability struct {
+	Operator string         `json:"operator,omitempty"`
+	Negate   *bool          `json:"negate,omitempty"`
+	Nodes    []CPEMatchNode `json:"nodes,omitempty"`
+}
+
+// CPEMatchNode is one node inside a CPE applicability tree. Upstream emits
+// either `negate` (CVE5 spec) or `negated` (NVD-style); both are preserved.
+type CPEMatchNode struct {
+	Operator string         `json:"operator,omitempty"`
+	Negate   *bool          `json:"negate,omitempty"`
+	Negated  *bool          `json:"negated,omitempty"`
+	CPEMatch []CPEMatch     `json:"cpeMatch,omitempty"`
+	Children []CPEMatchNode `json:"children,omitempty"`
+}
+
+// CPEMatch is a single matching CPE expression with optional version bounds.
+type CPEMatch struct {
+	Vulnerable            *bool  `json:"vulnerable,omitempty"`
+	Criteria              string `json:"criteria,omitempty"`
+	MatchCriteriaID       string `json:"matchCriteriaId,omitempty"`
+	VersionStartIncluding string `json:"versionStartIncluding,omitempty"`
+	VersionStartExcluding string `json:"versionStartExcluding,omitempty"`
+	VersionEndIncluding   string `json:"versionEndIncluding,omitempty"`
+	VersionEndExcluding   string `json:"versionEndExcluding,omitempty"`
 }
 
 // TaxonomyMapping is one external taxonomy reference (e.g. CWE -> CAPEC).
@@ -108,7 +179,7 @@ type Credit struct {
 
 // TimelineEntry is one entry under containers.cna.timeline.
 type TimelineEntry struct {
-	Time  time.Time `json:"time,omitzero"`
+	Time  Timestamp `json:"time,omitzero"`
 	Lang  string    `json:"lang,omitempty"`
 	Value string    `json:"value,omitempty"`
 }
@@ -117,7 +188,7 @@ type TimelineEntry struct {
 type ProviderMetadata struct {
 	OrgID       string    `json:"orgId,omitempty"`
 	ShortName   string    `json:"shortName,omitempty"`
-	DateUpdated time.Time `json:"dateUpdated,omitzero"`
+	DateUpdated Timestamp `json:"dateUpdated,omitzero"`
 }
 
 // Description is a localized free-form text. Reused by descriptions[],
@@ -151,7 +222,10 @@ type Affected struct {
 	Versions        []Version        `json:"versions,omitempty"`
 	DefaultStatus   string           `json:"defaultStatus,omitempty"`
 	CPEs            []string         `json:"cpes,omitempty"`
+	CPE             []string         `json:"cpe,omitempty"`
 	ProgramRoutines []ProgramRoutine `json:"programRoutines,omitempty"`
+	XEdition        string           `json:"x_edition,omitempty"`
+	XSWEdition      string           `json:"x_SWEdition,omitempty"`
 }
 
 // ProgramRoutine identifies a vulnerable function/routine inside one product.
@@ -251,6 +325,10 @@ type CVSS struct {
 	SubConfidentialityImpact  string `json:"subConfidentialityImpact,omitempty"`
 	SubIntegrityImpact        string `json:"subIntegrityImpact,omitempty"`
 	SubAvailabilityImpact     string `json:"subAvailabilityImpact,omitempty"`
+	// CVSS v4.0 modified subsequent impact metrics (environmental).
+	ModifiedSubConfidentialityImpact string `json:"modifiedSubConfidentialityImpact,omitempty"`
+	ModifiedSubIntegrityImpact       string `json:"modifiedSubIntegrityImpact,omitempty"`
+	ModifiedSubAvailabilityImpact    string `json:"modifiedSubAvailabilityImpact,omitempty"`
 	// CVSS v4.0 supplemental metrics. Upstream uses PascalCase for some;
 	// preserve verbatim.
 	Safety                      string `json:"Safety,omitempty"`

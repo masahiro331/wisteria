@@ -125,37 +125,47 @@ func checkKEV(root string, c *counter) {
 func diffOne(path string, c *counter, parseTyped func([]byte) (any, error)) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		c.bump("__read_error__:" + err.Error())
+		c.bump("__read_error__:"+err.Error(), path)
 		return
 	}
 	typed, err := parseTyped(raw)
 	if err != nil {
-		c.bump("__parse_error__:" + simplifyErr(err))
+		c.bump("__parse_error__:"+simplifyErr(err), path)
 		return
 	}
 	tBytes, err := json.Marshal(typed)
 	if err != nil {
-		c.bump("__remarshal_error__:" + err.Error())
+		c.bump("__remarshal_error__:"+err.Error(), path)
 		return
 	}
 	var tAny, rAny any
 	if err := json.Unmarshal(tBytes, &tAny); err != nil {
-		c.bump("__retype_error__:" + err.Error())
+		c.bump("__retype_error__:"+err.Error(), path)
 		return
 	}
 	if err := json.Unmarshal(raw, &rAny); err != nil {
-		c.bump("__rawtype_error__:" + err.Error())
+		c.bump("__rawtype_error__:"+err.Error(), path)
 		return
 	}
 	missing := []string{}
 	collectMissing("", normalize(rAny), normalize(tAny), &missing)
+	// Dedup within one file so a path that appears in many array elements
+	// still bumps the count by 1 here. Cross-file totals come from the
+	// per-file bumps.
+	seen := map[string]bool{}
 	for _, m := range missing {
-		c.bump(m)
+		if seen[m] {
+			continue
+		}
+		seen[m] = true
+		c.bump(m, path)
 	}
 }
 
 // collectMissing walks the raw tree; when a key/path appears in raw but not
-// in typed (or differs in non-trivial ways), record the path.
+// in typed, record the path. `null`, `[]`, and `{}` on the raw side are all
+// treated as information-equivalent to "absent" — a typed schema is allowed
+// to drop them because reading the field yields the zero value either way.
 func collectMissing(path string, raw, typed any, out *[]string) {
 	switch r := raw.(type) {
 	case map[string]any:
@@ -167,64 +177,56 @@ func collectMissing(path string, raw, typed any, out *[]string) {
 			}
 			tv, ok := t[k]
 			if !ok {
-				if !isEmpty(rv) {
-					*out = append(*out, child)
+				if isAbsentEquivalent(rv) {
+					continue
 				}
+				*out = append(*out, child)
 				continue
 			}
 			collectMissing(child, rv, tv, out)
 		}
 	case []any:
 		t, _ := typed.([]any)
-		// Walk the first element only as a structural sample; arrays are
-		// homogeneous in our schemas so this catches missing item-level
-		// fields without exploding sample size.
-		if len(r) > 0 && len(t) > 0 {
-			collectMissing(path+"[]", r[0], t[0], out)
+		// Union every element of raw with the matching element on the typed
+		// side (or the first typed element if shorter), so missing fields
+		// that only show up in non-leading entries still surface.
+		for i, rv := range r {
+			var tv any
+			switch {
+			case i < len(t):
+				tv = t[i]
+			case len(t) > 0:
+				tv = t[0]
+			}
+			collectMissing(path+"[]", rv, tv, out)
 		}
 	default:
 		// scalars: ignore value diffs (we only care about lost fields)
 	}
 }
 
-// normalize collapses things our typed schema cannot or does not preserve:
-// JSON numbers stay as float64, but maps with empty/null values are dropped
-// so they don't show up as "missing" when our schema also omits them.
-func normalize(v any) any {
-	switch x := v.(type) {
-	case map[string]any:
-		out := map[string]any{}
-		for k, vv := range x {
-			if isEmpty(vv) {
-				continue
-			}
-			out[k] = normalize(vv)
-		}
-		return out
-	case []any:
-		out := make([]any, 0, len(x))
-		for _, vv := range x {
-			if isEmpty(vv) {
-				continue
-			}
-			out = append(out, normalize(vv))
-		}
-		return out
-	default:
-		return v
-	}
-}
+// normalize is a passthrough today. Earlier versions stripped empty values
+// to suppress noise, but that masked omitempty-driven dropouts; the diff is
+// strict instead, with isAbsentEquivalent handling the narrow exceptions
+// (null, [], {}) at the comparison site.
+func normalize(v any) any { return v }
 
-func isEmpty(v any) bool {
+// isAbsentEquivalent reports whether a raw upstream value carries no
+// information beyond its bare presence — JSON null, an empty array, an
+// empty object, or Go's zero time stamp ("0001-01-01T00:00:00Z") that some
+// upstream catalogs (e.g. Debian OSV) emit literally for unset fields. The
+// typed schema is allowed to drop these via omitzero/omitempty because
+// re-reading the field produces the same zero value.
+func isAbsentEquivalent(v any) bool {
 	switch x := v.(type) {
 	case nil:
 		return true
-	case string:
-		return x == ""
 	case []any:
 		return len(x) == 0
 	case map[string]any:
 		return len(x) == 0
+	case string:
+		return x == "0001-01-01T00:00:00Z"
 	default:
 		return false
 	}
@@ -232,17 +234,28 @@ func isEmpty(v any) bool {
 
 // ----- helpers -----
 
+// counter tracks per-path occurrence counts and a few example file paths so
+// the report points the operator straight at the upstream files to grep.
 type counter struct {
-	m map[string]int
+	count   map[string]int
+	samples map[string][]string
 }
 
-func newCounter() *counter { return &counter{m: map[string]int{}} }
-func (c *counter) bump(k string) {
-	c.m[k]++
+const examplesPerPath = 3
+
+func newCounter() *counter {
+	return &counter{count: map[string]int{}, samples: map[string][]string{}}
+}
+
+func (c *counter) bump(k, samplePath string) {
+	c.count[k]++
+	if len(c.samples[k]) < examplesPerPath {
+		c.samples[k] = append(c.samples[k], samplePath)
+	}
 }
 
 func report(name string, c *counter) {
-	if len(c.m) == 0 {
+	if len(c.count) == 0 {
 		fmt.Printf("[%s] no missing fields detected ✅\n", name)
 		return
 	}
@@ -250,8 +263,8 @@ func report(name string, c *counter) {
 		k string
 		v int
 	}
-	rows := make([]kv, 0, len(c.m))
-	for k, v := range c.m {
+	rows := make([]kv, 0, len(c.count))
+	for k, v := range c.count {
 		rows = append(rows, kv{k, v})
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].v > rows[j].v })
@@ -262,6 +275,9 @@ func report(name string, c *counter) {
 			break
 		}
 		fmt.Printf("  %6d  %s\n", r.v, r.k)
+		for _, p := range c.samples[r.k] {
+			fmt.Printf("           e.g. %s\n", p)
+		}
 	}
 }
 
