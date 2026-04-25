@@ -30,6 +30,13 @@ var sourcePriority = []string{
 // which keeps unranked entries at the tail without sentinel constants.
 // Lower is higher priority.
 func priorityRank(source string) int {
+	return PriorityRank(source)
+}
+
+// PriorityRank is the exported variant used by sibling packages (e.g. writer)
+// to pick a "primary" Provenance among many. Returns the position in
+// sourcePriority, or len(sourcePriority) for unknown sources. Lower wins.
+func PriorityRank(source string) int {
 	for i, s := range sourcePriority {
 		if s == source {
 			return i

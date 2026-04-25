@@ -8,11 +8,13 @@
 //   - severities.go   — mergeSeverities (§8.4)
 //   - affected.go     — mergeAffected (§8.5, parallel hold)
 //   - convert.go      — upstream → unified shape adapters
-//   - unifier.go      — public per-PrimaryID orchestration used by debug
+//   - unifier.go      — MergePrimary: parse + merge for one PrimaryID.
 //
-// #16 added References + Severities; #17 adds Descriptions + Affected.
-// The production Unify entrypoint (full-index orchestration + writer
-// coordination) lands in #19.
+// Stage-level orchestration (PrimaryID fan-out, error policy, writer
+// hand-off) lives in cmd/unify so production can stream MergePrimary's
+// output straight to disk without buffering 100k+ records in memory.
+// SourceIDs (alias dedup) is collected inside MergePrimary in the same
+// pass that reads each OSV file. KEV / EPSS attachment is Stage 4.
 package unifier
 
 import (
@@ -21,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/masahiro331/wisteria/internal/unified"
 	"github.com/masahiro331/wisteria/internal/unified/cve"
@@ -29,17 +32,14 @@ import (
 
 // MergePrimary parses each IndexEntry under primaryID and applies the
 // per-field merge rules (References §8.2, Descriptions §8.3, Severities
-// §8.4, Affected §8.5). SourceIDs / KEV / EPSS remain zero — those land
-// in #19 (SourceIDs collection during full-index orchestration), #20,
-// and #21 respectively.
+// §8.4, Affected §8.5). SourceIDs (every alias other than the PrimaryID,
+// deduped + lex-sorted) are collected here in the same pass so each OSV
+// file is read at most once. KEV / EPSS land in #20 / #21.
 //
 // CVE5 records contribute one Provenance per container (the CNA plus
 // each ADP, e.g. CISA Vulnrichment). ADP IDs are suffixed with
 // "#adp:<shortName>" so downstream sorts treat them as parallel siblings
 // of the CNA without losing the source-of-record distinction.
-//
-// Used by `wisteria debug unify --id` to validate merge rules against
-// real source files; production wiring lives in #19.
 func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []unified.IndexEntry) (unified.UnifiedAdvisory, error) {
 	var (
 		refs        []unified.Reference
@@ -48,6 +48,13 @@ func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []
 		affs        []affectedItem
 		provenances []unified.Provenance
 	)
+	sourceIDs := make(map[string]struct{})
+	addSourceID := func(id string) {
+		if id == "" || id == primaryID {
+			return
+		}
+		sourceIDs[id] = struct{}{}
+	}
 	for _, e := range entries {
 		if err := ctx.Err(); err != nil {
 			return unified.UnifiedAdvisory{}, err
@@ -55,6 +62,7 @@ func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []
 		path := filepath.Join(sourcesRoot, e.Path)
 		prov := unified.Provenance{Kind: e.Kind, Path: e.Path, ID: e.SourceID}
 		provenances = append(provenances, prov)
+		addSourceID(e.SourceID)
 		switch e.Kind {
 		case unified.SourceOSV:
 			rec, err := readOSV(path)
@@ -66,6 +74,9 @@ func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []
 			descs = append(descs, OSVDescriptions(rec, prov, source)...)
 			sevs = append(sevs, OSVSeverities(rec.Severity, prov, source)...)
 			affs = append(affs, OSVAffectedRecords(rec.Affected, prov, source)...)
+			for _, a := range rec.Aliases {
+				addSourceID(a)
+			}
 		case unified.SourceCVE:
 			rec, err := readCVE(path)
 			if err != nil {
@@ -90,12 +101,28 @@ func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []
 	}
 	return unified.UnifiedAdvisory{
 		PrimaryID:    primaryID,
+		SourceIDs:    sortedSet(sourceIDs),
 		Descriptions: mergeDescriptions(descs),
 		References:   mergeReferences(refs),
 		Severities:   mergeSeverities(sevs),
 		Affected:     mergeAffected(affs),
 		Provenances:  provenances,
 	}, nil
+}
+
+// sortedSet returns the keys of a string set as a lex-sorted slice, or
+// nil when empty so the JSON output preserves the omitempty semantics on
+// optional alias bags.
+func sortedSet(m map[string]struct{}) []string {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func readOSV(path string) (osv.Record, error) {

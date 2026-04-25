@@ -29,6 +29,7 @@ func NewRootCmd() *cobra.Command {
 		"directory for downloaded data (overrides $WISTERIA_CACHE_DIR; defaults to user cache dir)",
 	)
 	root.AddCommand(newFetchCmd())
+	root.AddCommand(newUnifyCmd())
 	root.AddCommand(debug.NewCmd())
 	return root
 }

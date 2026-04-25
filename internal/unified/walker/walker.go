@@ -24,7 +24,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/masahiro331/wisteria/internal/unified"
 )
@@ -40,18 +44,24 @@ type osvLite struct {
 
 // Index walks <sourcesRoot> and returns PrimaryID -> []IndexEntry.
 //
-// The map's value list preserves the order in which entries were observed
-// during the walk (filepath.WalkDir's lexical order); callers that need a
-// stable cross-source ordering must sort themselves. Sequential walk by
-// design — concurrency is decided in a follow-up issue.
-func Index(ctx context.Context, sourcesRoot string) (map[string][]unified.IndexEntry, error) {
+// OSV body parsing fans out via a worker pool whose size is set by
+// WithConcurrency (default 4× NumCPU; I/O-bound). The walk itself
+// (filepath.WalkDir) and the per-PrimaryID merge into the result map
+// stay single-threaded so the map needs no lock and the entry order
+// inside each list remains lexical-by-path.
+//
+// Callers that need a stable cross-source ordering inside one PrimaryID
+// must sort themselves; this function only guarantees that the same
+// input tree produces an equal map regardless of concurrency.
+func Index(ctx context.Context, sourcesRoot string, opts ...Option) (map[string][]unified.IndexEntry, error) {
 	if _, err := os.Stat(sourcesRoot); err != nil {
 		return nil, fmt.Errorf("walker: stat sources root: %w", err)
 	}
+	cfg := newConfig(opts)
 
 	out := make(map[string][]unified.IndexEntry)
 
-	if err := walkOSV(ctx, sourcesRoot, out); err != nil {
+	if err := walkOSV(ctx, sourcesRoot, out, cfg.concurrency); err != nil {
 		return nil, err
 	}
 	if err := walkCVE(ctx, sourcesRoot, out); err != nil {
@@ -60,7 +70,28 @@ func Index(ctx context.Context, sourcesRoot string) (map[string][]unified.IndexE
 	return out, nil
 }
 
-func walkOSV(ctx context.Context, sourcesRoot string, out map[string][]unified.IndexEntry) error {
+// osvParseResult is what the parallel parser hands back to the main
+// goroutine for inclusion in the index. primaryIDs is pre-resolved
+// (each CVE-alias produces one entry; standalone records produce one
+// entry under their own id) so the main-side merge stays trivial.
+type osvParseResult struct {
+	entry      unified.IndexEntry
+	primaryIDs []string
+}
+
+// osvParseJob is the immutable per-file context handed from the WalkDir
+// goroutine to the worker pool: relative path under osvRoot for the
+// fenced ReadFile, the source-root-relative path that ends up in
+// IndexEntry, the absolute path used in error messages, and the
+// pre-extracted ecosystem segment.
+type osvParseJob struct {
+	relUnderOSV    string
+	relFromSources string
+	absPath        string
+	ecosystem      string
+}
+
+func walkOSV(ctx context.Context, sourcesRoot string, out map[string][]unified.IndexEntry, concurrency int) error {
 	osvRoot := filepath.Join(sourcesRoot, "osv")
 	if _, err := os.Stat(osvRoot); os.IsNotExist(err) {
 		return nil
@@ -76,75 +107,134 @@ func walkOSV(ctx context.Context, sourcesRoot string, out map[string][]unified.I
 	}
 	defer rootFS.Close()
 
-	return filepath.WalkDir(osvRoot, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
+	// Stage A: enumerate candidate files (single-threaded WalkDir).
+	// Stage B: ReadFile + json.Unmarshal in a bounded worker pool.
+	// Stage C: merge worker output into `out` in lexical order so the
+	// per-PrimaryID entry list matches the sequential walker exactly.
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(concurrency)
+
+	results := make(chan osvParseResult, concurrency*2)
+	var (
+		mergeWG sync.WaitGroup
+		buffer  []osvParseResult
+	)
+	mergeWG.Go(func() {
+		for r := range results {
+			buffer = append(buffer, r)
+		}
+	})
+
+	walkErr := filepath.WalkDir(osvRoot, func(path string, d fs.DirEntry, err error) error {
+		job, skip, err := osvWalkStep(gctx, sourcesRoot, osvRoot, path, d, err)
+		if err != nil || skip {
 			return err
 		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if d.IsDir() || !strings.HasSuffix(path, ".json") {
-			return nil
-		}
-		// Skip symlinks / sockets / fifos. Source trees are populated by
-		// the fetcher (zip / tar.gz extraction), neither of which should
-		// produce non-regular entries.
-		if !d.Type().IsRegular() {
-			return nil
-		}
-
-		// Ecosystem = directory name immediately under osv/. Spaces are
-		// replaced with "_" once here so every downstream consumer
-		// (writer's output path, unifier's priority tag) can use the
-		// value verbatim without re-applying the rule. Upstream dir name
-		// stays untouched on disk; only IndexEntry.Source is normalized.
-		rel, err := filepath.Rel(osvRoot, path)
-		if err != nil {
-			return fmt.Errorf("walker: rel %s: %w", path, err)
-		}
-		parts := strings.Split(rel, string(filepath.Separator))
-		if len(parts) < 2 {
-			// File directly under osv/ with no ecosystem dir. Shouldn't
-			// happen in fetcher output, but treat as skip rather than
-			// crash — the body parse below would still succeed.
-			return nil
-		}
-		ecosystem := strings.ReplaceAll(parts[0], " ", "_")
-
-		body, err := rootFS.ReadFile(rel)
-		if err != nil {
-			return fmt.Errorf("walker: read %s: %w", path, err)
-		}
-		var rec osvLite
-		if err := json.Unmarshal(body, &rec); err != nil {
-			return fmt.Errorf("walker: parse %s: %w", path, err)
-		}
-		if rec.ID == "" {
-			return fmt.Errorf("walker: %s: missing id", path)
-		}
-
-		relFromSources, err := filepath.Rel(sourcesRoot, path)
-		if err != nil {
-			return fmt.Errorf("walker: rel sources %s: %w", path, err)
-		}
-
-		entry := unified.IndexEntry{
-			Path:     relFromSources,
-			Kind:     unified.SourceOSV,
-			Source:   ecosystem,
-			SourceID: rec.ID,
-		}
-
-		cves := cveAliases(rec.Aliases)
-		if len(cves) == 0 {
-			out[rec.ID] = append(out[rec.ID], entry)
-			return nil
-		}
-		for _, cve := range cves {
-			out[cve] = append(out[cve], entry)
-		}
+		g.Go(func() error {
+			return parseOSVFile(gctx, rootFS, job, results)
+		})
 		return nil
 	})
+
+	// Wait for all workers, then close the channel so the merger drains.
+	groupErr := g.Wait()
+	close(results)
+	mergeWG.Wait()
+
+	if walkErr != nil {
+		return walkErr
+	}
+	if groupErr != nil {
+		return groupErr
+	}
+
+	// Restore lexical order: WalkDir dispatched in path order but workers
+	// finish in arbitrary order. Sorting by entry.Path reconstructs the
+	// sequential walker's per-PrimaryID entry order.
+	sort.SliceStable(buffer, func(i, j int) bool {
+		return buffer[i].entry.Path < buffer[j].entry.Path
+	})
+	for _, r := range buffer {
+		for _, pid := range r.primaryIDs {
+			out[pid] = append(out[pid], r.entry)
+		}
+	}
+	return nil
+}
+
+// osvWalkStep is the WalkDir-callback half of the OSV walk: filter +
+// path math only, no I/O. Returns (job, skip=true) for entries that the
+// walker should ignore (dirs, non-.json, non-regular, files lacking an
+// ecosystem dir). Errors short-circuit the walk.
+func osvWalkStep(ctx context.Context, sourcesRoot, osvRoot, path string, d fs.DirEntry, walkErr error) (osvParseJob, bool, error) {
+	if walkErr != nil {
+		return osvParseJob{}, true, walkErr
+	}
+	if err := ctx.Err(); err != nil {
+		return osvParseJob{}, true, err
+	}
+	if d.IsDir() || !strings.HasSuffix(path, ".json") {
+		return osvParseJob{}, true, nil
+	}
+	// Skip symlinks / sockets / fifos. Source trees are populated by
+	// the fetcher (zip / tar.gz extraction), neither of which should
+	// produce non-regular entries.
+	if !d.Type().IsRegular() {
+		return osvParseJob{}, true, nil
+	}
+	rel, err := filepath.Rel(osvRoot, path)
+	if err != nil {
+		return osvParseJob{}, true, fmt.Errorf("walker: rel %s: %w", path, err)
+	}
+	parts := strings.Split(rel, string(filepath.Separator))
+	if len(parts) < 2 {
+		// File directly under osv/ with no ecosystem dir. Shouldn't
+		// happen in fetcher output, but treat as skip rather than crash.
+		return osvParseJob{}, true, nil
+	}
+	relFromSources, err := filepath.Rel(sourcesRoot, path)
+	if err != nil {
+		return osvParseJob{}, true, fmt.Errorf("walker: rel sources %s: %w", path, err)
+	}
+	return osvParseJob{
+		relUnderOSV:    rel,
+		relFromSources: relFromSources,
+		absPath:        path,
+		ecosystem:      strings.ReplaceAll(parts[0], " ", "_"),
+	}, false, nil
+}
+
+// parseOSVFile is the worker-pool half: ReadFile + json.Unmarshal +
+// PrimaryID resolution. Sends one osvParseResult per file into results,
+// or returns the parse error so the errgroup can cancel siblings.
+func parseOSVFile(ctx context.Context, rootFS *os.Root, job osvParseJob, results chan<- osvParseResult) error {
+	body, err := rootFS.ReadFile(job.relUnderOSV)
+	if err != nil {
+		return fmt.Errorf("walker: read %s: %w", job.absPath, err)
+	}
+	var rec osvLite
+	if err := json.Unmarshal(body, &rec); err != nil {
+		return fmt.Errorf("walker: parse %s: %w", job.absPath, err)
+	}
+	if rec.ID == "" {
+		return fmt.Errorf("walker: %s: missing id", job.absPath)
+	}
+	entry := unified.IndexEntry{
+		Path:     job.relFromSources,
+		Kind:     unified.SourceOSV,
+		Source:   job.ecosystem,
+		SourceID: rec.ID,
+	}
+	pids := cveAliases(rec.Aliases)
+	if len(pids) == 0 {
+		pids = []string{rec.ID}
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case results <- osvParseResult{entry: entry, primaryIDs: pids}:
+		return nil
+	}
 }
 
 func walkCVE(ctx context.Context, sourcesRoot string, out map[string][]unified.IndexEntry) error {

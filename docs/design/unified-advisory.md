@@ -403,12 +403,12 @@ func Write(ctx context.Context, cacheDir string, records []unified.UnifiedAdviso
 
 **削除 guard:**
 
-`outDir = filepath.Join(filepath.Clean(cacheDir), "unified")` を内部で組み立て、削除前に以下を assert。いずれか満たさなければ error 返却。
+`outDir = filepath.Join(filepath.Clean(filepath.Abs(cacheDir)), "unified")` を内部で組み立て、削除前に以下を assert。いずれか満たさなければ error 返却。
 
 - `cacheDir` が空文字でないこと
-- `cacheDir` が絶対 path であること (`filepath.IsAbs`)
+- `cacheDir` が相対 path の場合は `filepath.Abs` で絶対化してから guard を通す (CLI から相対指定する運用を許容するため)
 - `outDir` の basename が `"unified"` であること
-- `outDir` の絶対 path が `/` ではないこと
+- 絶対化後の `outDir` が `/` ではないこと
 - 既存の `outDir` の扱い:
   - 存在しない: OK (初回実行)
   - ディレクトリとして存在: OK (削除して再生成)
