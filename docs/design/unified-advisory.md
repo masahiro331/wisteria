@@ -310,7 +310,9 @@ KEV / EPSS はベンダー / advisory ではなく exploit シグナルなので
 ### 8.3 Descriptions
 
 - merge せず並列保持
-- 並び順: 優先度配列順 → lang のアルファベット順
+- 並び順: 優先度配列順 → lang のアルファベット順 → 入力順 (再現性確保のための tie-breaker)
+- OSV 由来は `Summary` と `Details` を別エントリとして両方保持する (どちらも空でなければ)。要約 / 本文は意味が違うため後段の AI 要約に両方渡す
+- CVE5 は CNA の `containers.cna.descriptions[]` に加え、各 ADP (`containers.adp[].descriptions[]`、CISA Vulnrichment 等) も収集する。ADP 由来は Provenance.ID に `#adp:<providerShortName>` を付けて CNA と区別 (情報量を最大化する方針: 後段 AI で取捨選択する)
 
 ### 8.4 Severities
 
@@ -322,8 +324,9 @@ KEV / EPSS はベンダー / advisory ではなく exploit シグナルなので
 
 ### 8.5 Affected
 
-- merge せず並列保持
-- 並び順: 優先度配列順 → Provenance.ID 順
+- merge せず並列保持。OSV / CVE の affected substructure はそのままポインタで保持する (`AffectedRecord.OSV` または `.CVE`)。version range / package name 形式の差異の reconciliation は後段 (Phase 2 / 3) に委ねる
+- 並び順: 優先度配列順 → Provenance.ID → 入力順 (tie-breaker: 1 OSV ファイルが N packages を持つ典型ケースで出力を決定的にするため)
+- CVE5 は §8.3 と同じく CNA + 各 ADP を全て収集する。ADP は Provenance.ID 末尾に `#adp:<providerShortName>` を付与
 
 ### 8.6 KEV / EPSS
 
