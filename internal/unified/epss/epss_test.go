@@ -23,6 +23,32 @@ CVE-2021-44228,0.94358,0.99962
 	if got.Scores[2] != want {
 		t.Errorf("Scores[2] = %#v, want %#v", got.Scores[2], want)
 	}
+	// The leading `#model_version:..,score_date:..` comment carries the
+	// catalog metadata Stage 4 attaches to each score; the parser must
+	// expose it instead of dropping it on the floor.
+	if got.ModelVersion != "v2025.03.14" {
+		t.Errorf("ModelVersion = %q, want v2025.03.14", got.ModelVersion)
+	}
+	if got.ScoreDate != "2026-04-24T12:55:00Z" {
+		t.Errorf("ScoreDate = %q, want 2026-04-24T12:55:00Z", got.ScoreDate)
+	}
+}
+
+func TestRead_HeaderCommentMissingFieldsLeavesEmpty(t *testing.T) {
+	// A non-conforming comment line (no model_version / score_date) must
+	// not error — Stage 4 falls back to attaching just the score.
+	const body = `#unrelated comment
+cve,epss,percentile
+CVE-2024-0001,0.5,0.9
+`
+	got, err := Read(strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if got.ModelVersion != "" || got.ScoreDate != "" {
+		t.Errorf("expected empty metadata, got ModelVersion=%q ScoreDate=%q",
+			got.ModelVersion, got.ScoreDate)
+	}
 }
 
 func TestRead_SkipsCommentAndHeader(t *testing.T) {
