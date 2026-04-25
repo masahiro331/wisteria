@@ -26,6 +26,9 @@ func TestDir_DefaultsToUserCacheDir(t *testing.T) {
 	if filepath.Base(got) != "osv" {
 		t.Errorf("expected base dir %q, got %q", "osv", filepath.Base(got))
 	}
+	if filepath.Base(filepath.Dir(got)) != "sources" {
+		t.Errorf("expected parent dir %q, got %q", "sources", filepath.Base(filepath.Dir(got)))
+	}
 	info, err := os.Stat(got)
 	if err != nil {
 		t.Fatalf("expected directory to exist: %v", err)
@@ -66,7 +69,7 @@ func TestDir_OverrideTakesPrecedenceOverEnvAndDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dir returned error: %v", err)
 	}
-	want := filepath.Join(override, "osv")
+	want := filepath.Join(override, "sources", "osv")
 	if got != want {
 		t.Errorf("Dir = %q, want %q", got, want)
 	}
@@ -83,7 +86,7 @@ func TestDir_EnvUsedWhenOverrideEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dir returned error: %v", err)
 	}
-	want := filepath.Join(envDir, "cve")
+	want := filepath.Join(envDir, "sources", "cve")
 	if got != want {
 		t.Errorf("Dir = %q, want %q", got, want)
 	}

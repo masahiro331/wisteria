@@ -32,13 +32,17 @@ func Root(override string) (string, error) {
 	return root, nil
 }
 
-// Dir resolves a per-source cache directory under Root and creates it.
+// SourcesSubdir is the subdirectory under Root that holds raw downloads.
+// The unified pipeline writes its output to a sibling subdirectory.
+const SourcesSubdir = "sources"
+
+// Dir resolves a per-source cache directory under Root/sources and creates it.
 func Dir(override, source string) (string, error) {
 	root, err := Root(override)
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(root, source)
+	dir := filepath.Join(root, SourcesSubdir, source)
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return "", fmt.Errorf("create cache dir %s: %w", dir, err)
 	}

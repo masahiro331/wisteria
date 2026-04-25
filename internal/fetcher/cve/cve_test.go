@@ -83,7 +83,7 @@ func TestFetcher_Fetch_RespectsCacheDirOverride(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fetch returned error: %v", err)
 	}
-	want := filepath.Join(override, "cve")
+	want := filepath.Join(override, "sources", "cve")
 	if dir != want {
 		t.Errorf("dir = %q, want %q", dir, want)
 	}
