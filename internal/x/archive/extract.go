@@ -1,7 +1,7 @@
-// Package extract unpacks compressed archives into a destination directory.
+// Package archive unpacks compressed archives into a destination directory.
 // Both Zip and TarGz reject entries whose resolved path escapes the
 // destination root (zip-slip / tar-slip).
-package extract
+package archive
 
 import (
 	"archive/tar"

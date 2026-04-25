@@ -10,10 +10,10 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/masahiro331/wisteria/internal/cache"
-	"github.com/masahiro331/wisteria/internal/extract"
-	"github.com/masahiro331/wisteria/internal/httpx"
-	"github.com/masahiro331/wisteria/internal/progress"
+	"github.com/masahiro331/wisteria/internal/fetcher/progress"
+	"github.com/masahiro331/wisteria/internal/x/archive"
+	"github.com/masahiro331/wisteria/internal/x/cachedir"
+	"github.com/masahiro331/wisteria/internal/x/httpx"
 )
 
 const (
@@ -70,7 +70,7 @@ func (f *Fetcher) Name() string { return sourceName }
 // Fetch downloads the archive into the cache directory and returns the
 // directory root.
 func (f *Fetcher) Fetch(ctx context.Context) (string, error) {
-	dir, err := cache.Dir(f.cacheDir, sourceName)
+	dir, err := cachedir.Dir(f.cacheDir, sourceName)
 	if err != nil {
 		return "", err
 	}
@@ -94,7 +94,7 @@ func (f *Fetcher) Fetch(ctx context.Context) (string, error) {
 	}
 	f.progress.Wait()
 
-	if err := extract.TarGz(dest, dir); err != nil {
+	if err := archive.TarGz(dest, dir); err != nil {
 		return "", fmt.Errorf("extract %s: %w", dest, err)
 	}
 	if err := os.Remove(dest); err != nil {

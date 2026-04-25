@@ -14,10 +14,10 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/masahiro331/wisteria/internal/cache"
-	"github.com/masahiro331/wisteria/internal/extract"
-	"github.com/masahiro331/wisteria/internal/httpx"
-	"github.com/masahiro331/wisteria/internal/progress"
+	"github.com/masahiro331/wisteria/internal/fetcher/progress"
+	"github.com/masahiro331/wisteria/internal/x/archive"
+	"github.com/masahiro331/wisteria/internal/x/cachedir"
+	"github.com/masahiro331/wisteria/internal/x/httpx"
 )
 
 const (
@@ -92,7 +92,7 @@ func (f *Fetcher) Name() string { return sourceName }
 // Fetch downloads the ecosystem list and each ecosystem's archive into the
 // cache directory, returning the directory root.
 func (f *Fetcher) Fetch(ctx context.Context) (string, error) {
-	dir, err := cache.Dir(f.cacheDir, sourceName)
+	dir, err := cachedir.Dir(f.cacheDir, sourceName)
 	if err != nil {
 		return "", err
 	}
@@ -157,7 +157,7 @@ func (f *Fetcher) downloadEcosystem(ctx context.Context, root, ecosystem string)
 	if err := writeArchive(dest, resp, f.progress.Bar(ecosystem, resp.ContentLength)); err != nil {
 		return err
 	}
-	if err := extract.Zip(dest, dir); err != nil {
+	if err := archive.Zip(dest, dir); err != nil {
 		return fmt.Errorf("extract %s: %w", dest, err)
 	}
 	if err := os.Remove(dest); err != nil {
