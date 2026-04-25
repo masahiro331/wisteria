@@ -93,9 +93,11 @@ func walkOSV(ctx context.Context, sourcesRoot string, out map[string][]unified.I
 			return nil
 		}
 
-		// Ecosystem = directory name immediately under osv/. Per design
-		// §4, the ecosystem name is preserved verbatim (including spaces
-		// like "Rocky Linux"); we do not normalize here.
+		// Ecosystem = directory name immediately under osv/. Spaces are
+		// replaced with "_" once here so every downstream consumer
+		// (writer's output path, unifier's priority tag) can use the
+		// value verbatim without re-applying the rule. Upstream dir name
+		// stays untouched on disk; only IndexEntry.Source is normalized.
 		rel, err := filepath.Rel(osvRoot, path)
 		if err != nil {
 			return fmt.Errorf("walker: rel %s: %w", path, err)
@@ -107,7 +109,7 @@ func walkOSV(ctx context.Context, sourcesRoot string, out map[string][]unified.I
 			// crash — the body parse below would still succeed.
 			return nil
 		}
-		ecosystem := parts[0]
+		ecosystem := strings.ReplaceAll(parts[0], " ", "_")
 
 		body, err := rootFS.ReadFile(rel)
 		if err != nil {

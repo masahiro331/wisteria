@@ -17,5 +17,6 @@ func NewCmd() *cobra.Command {
 		Short: "Inspection helpers for the unified-advisory pipeline (developer tool)",
 	}
 	c.AddCommand(newIndexCmd())
+	c.AddCommand(newUnifyCmd())
 	return c
 }
