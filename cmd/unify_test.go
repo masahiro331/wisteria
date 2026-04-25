@@ -66,6 +66,42 @@ func TestUnifyCmd_WritesBothBuckets(t *testing.T) {
 	}
 }
 
+// TestUnifyCmd_AppliesStage4 covers the wiring between Stage 3 and the
+// annotators: a fixture that contains both source files AND KEV / EPSS
+// catalogs must produce a unified file with both signal fields set.
+// Catches the regression where someone removes the AnnotateKEV /
+// AnnotateEPSS calls from cmd/unify.go.
+func TestUnifyCmd_AppliesStage4(t *testing.T) {
+	cacheDir := unifyFixture(t)
+	src := filepath.Join(cacheDir, "sources")
+	writeFile(t, src, "kev/known_exploited_vulnerabilities.json", `{
+		"title":"t","catalogVersion":"v","dateReleased":"2024-04-01T00:00:00Z","count":1,
+		"vulnerabilities":[
+			{"cveID":"CVE-2024-0001","vendorProject":"Acme","product":"Widget",
+			 "vulnerabilityName":"x","dateAdded":"2024-03-01","shortDescription":"s",
+			 "requiredAction":"r","dueDate":"2024-03-22","knownRansomwareCampaignUse":"Known",
+			 "notes":"","cwes":[]}
+		]
+	}`)
+	writeFile(t, src, "epss/epss_scores-current.csv",
+		"#model_version:v1,score_date:2026-04-24T12:55:00Z\ncve,epss,percentile\nCVE-2024-0001,0.5,0.9\n")
+
+	if _, _, err := runUnify(t, "--cache-dir", cacheDir); err != nil {
+		t.Fatalf("unify: %v", err)
+	}
+
+	body, err := os.ReadFile(filepath.Join(cacheDir, "unified", "cve", "2024", "CVE-2024-0001.json"))
+	if err != nil {
+		t.Fatalf("read unified file: %v", err)
+	}
+	if !bytes.Contains(body, []byte(`"vendor_project": "Acme"`)) {
+		t.Errorf("KEV not applied to unified file:\n%s", body)
+	}
+	if !bytes.Contains(body, []byte(`"score": 0.5`)) {
+		t.Errorf("EPSS not applied to unified file:\n%s", body)
+	}
+}
+
 func TestUnifyCmd_FailsFastOnBrokenSource(t *testing.T) {
 	cacheDir := t.TempDir()
 	src := filepath.Join(cacheDir, "sources")
