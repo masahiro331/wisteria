@@ -17,6 +17,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/masahiro331/wisteria/internal/ai"
 	"github.com/masahiro331/wisteria/internal/unified"
 )
 
@@ -86,9 +87,10 @@ type chatResponse struct {
 }
 
 // Summarize sends one UnifiedAdvisory to Ollama and decodes the response
-// content into AdvisoryAISummary. Decode failures wrap the raw model
-// content so callers can inspect what the model returned.
-func (c *Client) Summarize(ctx context.Context, advisory unified.UnifiedAdvisory) (*AdvisoryAISummary, error) {
+// content into ai.AdvisoryAISummary. Decode failures wrap the raw
+// model content so callers can inspect what the model returned. The
+// method makes *Client satisfy ai.Summarizer.
+func (c *Client) Summarize(ctx context.Context, advisory unified.UnifiedAdvisory) (*ai.AdvisoryAISummary, error) {
 	advisoryJSON, err := json.Marshal(advisory)
 	if err != nil {
 		return nil, fmt.Errorf("marshal advisory: %w", err)
@@ -149,7 +151,7 @@ func (c *Client) Summarize(ctx context.Context, advisory unified.UnifiedAdvisory
 		return nil, fmt.Errorf("invalid model output: confidence is missing (raw: %s)", decoded.Message.Content)
 	}
 
-	var summary AdvisoryAISummary
+	var summary ai.AdvisoryAISummary
 	if err := json.Unmarshal(contentBytes, &summary); err != nil {
 		return nil, fmt.Errorf("decode model content: %w (raw: %s)", err, decoded.Message.Content)
 	}
