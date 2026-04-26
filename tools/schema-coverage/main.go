@@ -14,7 +14,7 @@
 //
 // Usage from repo root:
 //
-//	go run ./debug/schema-coverage \
+//	go run ./tools/schema-coverage \
 //	    [-root tmp/sources] \
 //	    [-per-ecosystem 50] \
 //	    [-per-year 50]
