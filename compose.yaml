@@ -1,0 +1,34 @@
+# Local development helper for the Phase 2 AI layer.
+#
+# `docker compose up -d` brings up an Ollama server reachable at
+# http://localhost:11434, which is what internal/ai/ollama defaults to.
+# Models are persisted by bind-mounting WISTERIA_OLLAMA_DIR (default
+# ${HOME}/.ollama) into the container so a `docker compose down` does
+# not throw away the multi-GB qwen3 weights.
+#
+# GPU notes:
+#   * Linux + NVIDIA: uncomment the `deploy.resources` block below and
+#     install the NVIDIA Container Toolkit on the host.
+#   * Apple Silicon (M1/M2/M3): leave it commented. Docker Desktop on
+#     macOS cannot pass the Apple GPU through to a Linux container,
+#     so inference falls back to CPU and qwen3:8b takes minutes per
+#     advisory. For Mac, the native Ollama install
+#     (`brew install ollama`) is much faster — see
+#     docs/operations/ollama-setup.md.
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: wisteria-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ${WISTERIA_OLLAMA_DIR:-${HOME}/.ollama}:/root/.ollama
+    restart: unless-stopped
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
