@@ -39,15 +39,22 @@ const (
 )
 
 // Client calls a local Ollama HTTP endpoint. The zero value is usable
-// and resolves to Endpoint=http://localhost:11434, Model=qwen3:8b, and
-// HTTP=http.DefaultClient; set the fields explicitly to override any of
-// them (typically Endpoint in tests, Model when falling back to a
-// smaller variant per design §3 fallback). Safe for concurrent use as
-// long as the underlying http.Client is.
+// and resolves to Endpoint=http://localhost:11434, Model=qwen3:8b,
+// HTTP=http.DefaultClient, and think=false; set the fields explicitly
+// to override any of them (typically Endpoint in tests, Model when
+// falling back to a smaller variant per design §3 fallback, Think to
+// re-enable chain-of-thought on a model that benefits from it). Safe
+// for concurrent use as long as the underlying http.Client is.
 type Client struct {
 	Endpoint string       // default: http://localhost:11434
 	Model    string       // default: qwen3:8b
 	HTTP     *http.Client // default: http.DefaultClient
+	// Think controls Ollama's `think` flag. nil means "default to
+	// false" — qwen3 is a thinking model, and with think enabled it
+	// burns num_predict on a hidden <think> block and returns an
+	// empty assistant content. Set to a pointer to true only when
+	// running a model that should keep its reasoning step.
+	Think *bool
 }
 
 type chatMessage struct {
@@ -64,6 +71,7 @@ type chatOptions struct {
 type chatRequest struct {
 	Model    string         `json:"model"`
 	Stream   bool           `json:"stream"`
+	Think    bool           `json:"think"`
 	Format   map[string]any `json:"format"`
 	Options  chatOptions    `json:"options"`
 	Messages []chatMessage  `json:"messages"`
@@ -85,6 +93,7 @@ func (c *Client) Summarize(ctx context.Context, advisory unified.UnifiedAdvisory
 	body := chatRequest{
 		Model:  c.model(),
 		Stream: false,
+		Think:  c.think(),
 		Format: summarySchema(),
 		Options: chatOptions{
 			Temperature: defaultTemperature,
@@ -153,6 +162,13 @@ func (c *Client) httpClient() *http.Client {
 		return http.DefaultClient
 	}
 	return c.HTTP
+}
+
+func (c *Client) think() bool {
+	if c.Think == nil {
+		return false
+	}
+	return *c.Think
 }
 
 func buildUserPrompt(primaryID string, advisoryJSON []byte) string {

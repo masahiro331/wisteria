@@ -92,6 +92,43 @@ func TestClient_Summarize_RequestModelAndStream(t *testing.T) {
 	}
 }
 
+func TestClient_Summarize_DefaultThinkIsFalse(t *testing.T) {
+	t.Parallel()
+	srv, got := recordingServer(t)
+
+	c := &ollama.Client{Endpoint: srv.URL}
+	if _, err := c.Summarize(context.Background(), sampleAdvisory()); err != nil {
+		t.Fatalf("Summarize: %v", err)
+	}
+
+	v, ok := got.body["think"].(bool)
+	if !ok {
+		t.Fatalf("think field is not bool: %T (%v)", got.body["think"], got.body["think"])
+	}
+	if v {
+		t.Errorf("think = true, want false (default suppresses qwen3 chain-of-thought)")
+	}
+}
+
+func TestClient_Summarize_ThinkOptInIsHonored(t *testing.T) {
+	t.Parallel()
+	srv, got := recordingServer(t)
+
+	think := true
+	c := &ollama.Client{Endpoint: srv.URL, Think: &think}
+	if _, err := c.Summarize(context.Background(), sampleAdvisory()); err != nil {
+		t.Fatalf("Summarize: %v", err)
+	}
+
+	v, ok := got.body["think"].(bool)
+	if !ok {
+		t.Fatalf("think field is not bool: %T (%v)", got.body["think"], got.body["think"])
+	}
+	if !v {
+		t.Errorf("think = false, want true (Client.Think opt-in)")
+	}
+}
+
 func TestClient_Summarize_RequestFormatSchema(t *testing.T) {
 	t.Parallel()
 	srv, got := recordingServer(t)

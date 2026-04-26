@@ -128,6 +128,7 @@ type Client struct {
     Endpoint string // default: http://localhost:11434
     Model    string // default: qwen3:8b
     HTTP     *http.Client
+    Think    *bool  // default: false (suppress qwen3 chain-of-thought)
 }
 
 func (c *Client) Summarize(ctx context.Context, advisory unified.UnifiedAdvisory) (*AdvisoryAISummary, error)
@@ -136,6 +137,7 @@ func (c *Client) Summarize(ctx context.Context, advisory unified.UnifiedAdvisory
 実装方針:
 
 - `POST /api/chat` を `stream: false` で呼ぶ。
+- `think: false` を送る。qwen3 系は thinking model で、デフォルト動作だと `<think>...</think>` で `num_predict` を使い切り `message.content` が空のまま `done` になる。要約用途なので chain-of-thought は不要、`think:false` でレイテンシを 2 分超 → 数秒に下げる。`Client.Think` で opt-in に戻せる。
 - `format` に JSON Schema を渡す。
 - `options.temperature = 0`。
 - `options.num_ctx = 8192` から開始する。
