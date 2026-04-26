@@ -27,9 +27,8 @@ const (
 	chatPath = "/api/chat"
 
 	// Runtime parameters per design §12 (M1 16GB initial values).
-	defaultTemperature = 0
-	defaultNumCtx      = 8192
-	defaultNumPredict  = 1200
+	defaultNumCtx     = 8192
+	defaultNumPredict = 1200
 
 	systemPrompt = "You summarize vulnerability advisories for security engineers.\n" +
 		"Return only JSON that matches the provided schema.\n" +
@@ -37,6 +36,11 @@ const (
 		"Use null or [] when the input does not contain enough information.\n" +
 		"Prefer concrete affected products, versions, fixed versions, impact, and recommended action."
 )
+
+// defaultTemperature is split out of the const block above because it
+// must be float64 to match chatOptions.Temperature; mixing typed and
+// untyped constants in one group trips staticcheck SA9004.
+const defaultTemperature float64 = 0
 
 // Client calls a local Ollama HTTP endpoint. The zero value is usable
 // and resolves to Endpoint=http://localhost:11434, Model=qwen3:8b,
@@ -63,9 +67,9 @@ type chatMessage struct {
 }
 
 type chatOptions struct {
-	Temperature int `json:"temperature"`
-	NumCtx      int `json:"num_ctx"`
-	NumPredict  int `json:"num_predict"`
+	Temperature float64 `json:"temperature"`
+	NumCtx      int     `json:"num_ctx"`
+	NumPredict  int     `json:"num_predict"`
 }
 
 type chatRequest struct {
@@ -132,8 +136,21 @@ func (c *Client) Summarize(ctx context.Context, advisory unified.UnifiedAdvisory
 		return nil, fmt.Errorf("decode ollama response: %w", err)
 	}
 
+	contentBytes := []byte(decoded.Message.Content)
+
+	// First pass into a generic map so we can detect *missing* required
+	// scalars (e.g. confidence) — once decoded into a struct, an absent
+	// number key and an explicit zero are indistinguishable.
+	var raw map[string]any
+	if err := json.Unmarshal(contentBytes, &raw); err != nil {
+		return nil, fmt.Errorf("decode model content: %w (raw: %s)", err, decoded.Message.Content)
+	}
+	if _, ok := raw["confidence"]; !ok {
+		return nil, fmt.Errorf("invalid model output: confidence is missing (raw: %s)", decoded.Message.Content)
+	}
+
 	var summary AdvisoryAISummary
-	if err := json.Unmarshal([]byte(decoded.Message.Content), &summary); err != nil {
+	if err := json.Unmarshal(contentBytes, &summary); err != nil {
 		return nil, fmt.Errorf("decode model content: %w (raw: %s)", err, decoded.Message.Content)
 	}
 	summary.Normalize()

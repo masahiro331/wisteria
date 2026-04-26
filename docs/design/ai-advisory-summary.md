@@ -111,9 +111,13 @@ User prompt:
 ```text
 Summarize this vulnerability advisory in English.
 
+PrimaryID: <CVE-ID or other primary identifier>
+
 Input UnifiedAdvisory JSON:
 <json>
 ```
+
+`PrimaryID:` 行は雛形に対する小さな追加。JSON 内にも `primary_id` は入っているが、model が要約タスクでまず参照する識別子を冒頭に置いた方が `title` の一貫性が上がる。
 
 JSON Schema は Ollama request の `format` に渡す。schema 自体も prompt に含めると model が安定しやすいが、初版では `format` を主たる制約として使う。
 

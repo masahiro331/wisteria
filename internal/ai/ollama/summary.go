@@ -1,6 +1,9 @@
 package ollama
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // AdvisoryAISummary is the structured output produced by the LLM for one
 // UnifiedAdvisory. Pointer / slice fields follow design §5: unknown string
@@ -20,11 +23,18 @@ type AdvisoryAISummary struct {
 }
 
 // Validate enforces design §5 constraints that the JSON Schema cannot
-// fully express on the model side: confidence must be within [0, 1].
-// JSON type mismatches fail earlier at json.Unmarshal time. Missing
-// array fields are tolerated and normalized to empty slices by
-// Normalize, so they do not show up here.
+// fully express on the model side: title must be non-empty (the model
+// is instructed to summarize, an empty title is never the correct
+// answer), and confidence must be within [0, 1]. Note that confidence
+// presence (vs. an explicit zero) is checked one level up in the
+// client because that needs the raw JSON map. JSON type mismatches
+// fail earlier at json.Unmarshal time. Missing array fields are
+// tolerated and normalized to empty slices by Normalize, so they do
+// not show up here.
 func (s *AdvisoryAISummary) Validate() error {
+	if s.Title == "" {
+		return errors.New("title is empty")
+	}
 	if s.Confidence < 0 || s.Confidence > 1 {
 		return fmt.Errorf("confidence %v out of range [0, 1]", s.Confidence)
 	}
@@ -59,7 +69,8 @@ func summarySchema() map[string]any {
 		"items": map[string]any{"type": "string"},
 	}
 	return map[string]any{
-		"type": "object",
+		"type":                 "object",
+		"additionalProperties": false,
 		"properties": map[string]any{
 			"title":               map[string]any{"type": "string"},
 			"affected_products":   stringArray,

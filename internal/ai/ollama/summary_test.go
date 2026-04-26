@@ -10,7 +10,7 @@ import (
 func TestAdvisoryAISummary_Validate_AcceptsValidConfidence(t *testing.T) {
 	t.Parallel()
 	for _, c := range []float64{0, 0.5, 1} {
-		s := ollama.AdvisoryAISummary{Confidence: c}
+		s := ollama.AdvisoryAISummary{Title: "x", Confidence: c}
 		if err := s.Validate(); err != nil {
 			t.Errorf("Validate(confidence=%v) returned %v, want nil", c, err)
 		}
@@ -20,7 +20,7 @@ func TestAdvisoryAISummary_Validate_AcceptsValidConfidence(t *testing.T) {
 func TestAdvisoryAISummary_Validate_RejectsOutOfRangeConfidence(t *testing.T) {
 	t.Parallel()
 	for _, c := range []float64{-0.01, 1.01, 2, -1} {
-		s := ollama.AdvisoryAISummary{Confidence: c}
+		s := ollama.AdvisoryAISummary{Title: "x", Confidence: c}
 		err := s.Validate()
 		if err == nil {
 			t.Errorf("Validate(confidence=%v) returned nil, want error", c)
@@ -29,6 +29,18 @@ func TestAdvisoryAISummary_Validate_RejectsOutOfRangeConfidence(t *testing.T) {
 		if !strings.Contains(err.Error(), "confidence") {
 			t.Errorf("Validate(confidence=%v) error = %v, want it to mention confidence", c, err)
 		}
+	}
+}
+
+func TestAdvisoryAISummary_Validate_RejectsEmptyTitle(t *testing.T) {
+	t.Parallel()
+	s := ollama.AdvisoryAISummary{Title: "", Confidence: 0.5}
+	err := s.Validate()
+	if err == nil {
+		t.Fatal("Validate(title=\"\") returned nil, want error")
+	}
+	if !strings.Contains(err.Error(), "title") {
+		t.Errorf("error = %v, want it to mention title", err)
 	}
 }
 

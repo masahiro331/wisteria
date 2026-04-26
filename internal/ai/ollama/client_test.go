@@ -145,6 +145,9 @@ func TestClient_Summarize_RequestFormatSchema(t *testing.T) {
 	if format["type"] != "object" {
 		t.Errorf("format.type = %v, want object", format["type"])
 	}
+	if v, ok := format["additionalProperties"].(bool); !ok || v {
+		t.Errorf("format.additionalProperties = %v (ok=%v), want false", format["additionalProperties"], ok)
+	}
 
 	// required must enumerate every design §5 field — drop one and the
 	// model can legally omit it, which we don't want.
@@ -200,6 +203,11 @@ func TestClient_Summarize_RequestFormatSchema(t *testing.T) {
 		assertSchemaArrayOfString(t, props, key)
 	}
 
+	assertConfidenceSchema(t, props)
+}
+
+func assertConfidenceSchema(t *testing.T, props map[string]any) {
+	t.Helper()
 	conf, ok := props["confidence"].(map[string]any)
 	if !ok {
 		t.Fatalf("confidence schema is not an object: %T", props["confidence"])
@@ -413,6 +421,57 @@ func TestClient_Summarize_NormalizesNilArrays(t *testing.T) {
 	}
 }
 
+func TestClient_Summarize_RejectsMissingConfidence(t *testing.T) {
+	t.Parallel()
+
+	// confidence is omitted entirely. Go's json.Unmarshal would silently
+	// leave Confidence as the zero value (0), which is also a valid
+	// model output. The client must distinguish "absent" from "zero" and
+	// reject the absent case so downstream callers don't treat missing
+	// data as a real low-confidence reading.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		resp := map[string]any{
+			"message": map[string]any{
+				"content": `{"title":"x","affected_products":[],"affected_versions":[],"fixed_versions":[],"missing_information":[]}`,
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	t.Cleanup(srv.Close)
+
+	c := &ollama.Client{Endpoint: srv.URL}
+	_, err := c.Summarize(context.Background(), sampleAdvisory())
+	if err == nil {
+		t.Fatal("Summarize returned nil error, want error for missing confidence")
+	}
+	if !strings.Contains(err.Error(), "confidence") {
+		t.Errorf("error does not mention confidence: %v", err)
+	}
+}
+
+func TestClient_Summarize_RejectsEmptyTitle(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		resp := map[string]any{
+			"message": map[string]any{
+				"content": `{"title":"","affected_products":[],"affected_versions":[],"fixed_versions":[],"missing_information":[],"confidence":0.5}`,
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	t.Cleanup(srv.Close)
+
+	c := &ollama.Client{Endpoint: srv.URL}
+	_, err := c.Summarize(context.Background(), sampleAdvisory())
+	if err == nil {
+		t.Fatal("Summarize returned nil error, want error for empty title")
+	}
+	if !strings.Contains(err.Error(), "title") {
+		t.Errorf("error does not mention title: %v", err)
+	}
+}
+
 func TestClient_Summarize_RejectsOutOfRangeConfidence(t *testing.T) {
 	t.Parallel()
 
@@ -521,7 +580,7 @@ func TestClient_Summarize_ContextCancellation(t *testing.T) {
 	})
 
 	c := &ollama.Client{Endpoint: srv.URL}
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
 	_, err := c.Summarize(ctx, sampleAdvisory())
