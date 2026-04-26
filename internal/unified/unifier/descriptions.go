@@ -1,7 +1,7 @@
 package unifier
 
 import (
-	"sort"
+	"cmp"
 
 	"github.com/masahiro331/wisteria/internal/unified"
 )
@@ -19,27 +19,17 @@ type descriptionItem struct {
 // the original input index keeps OSV's Summary-then-Details pair stable
 // and gives reproducible JSON output.
 func mergeDescriptions(in []descriptionItem) []unified.Description {
-	if len(in) == 0 {
+	sorted := stableSortByPriority(
+		in,
+		func(it descriptionItem) string { return it.source },
+		func(a, b descriptionItem) int { return cmp.Compare(a.Lang, b.Lang) },
+	)
+	if sorted == nil {
 		return nil
 	}
-	indices := make([]int, len(in))
-	for i := range in {
-		indices[i] = i
-	}
-	sort.SliceStable(indices, func(a, b int) bool {
-		ia, ib := indices[a], indices[b]
-		ra, rb := PriorityRank(in[ia].source), PriorityRank(in[ib].source)
-		if ra != rb {
-			return ra < rb
-		}
-		if in[ia].Lang != in[ib].Lang {
-			return in[ia].Lang < in[ib].Lang
-		}
-		return ia < ib
-	})
-	out := make([]unified.Description, len(in))
-	for i, idx := range indices {
-		out[i] = in[idx].Description
+	out := make([]unified.Description, len(sorted))
+	for i, it := range sorted {
+		out[i] = it.Description
 	}
 	return out
 }

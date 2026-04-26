@@ -1,7 +1,7 @@
 package unifier
 
 import (
-	"sort"
+	"cmp"
 
 	"github.com/masahiro331/wisteria/internal/unified"
 )
@@ -47,32 +47,32 @@ func mergeSeverities(in []severityItem) []unified.Severity {
 			buckets[k] = &bucket{item: item, rank: r}
 		}
 	}
-	out := make([]severityItem, 0, len(buckets))
+	deduped := make([]severityItem, 0, len(buckets))
 	for _, b := range buckets {
-		out = append(out, b.item)
+		deduped = append(deduped, b.item)
 	}
 	// Sort key: (source rank, Type, Vector, Score). The (Vector, Score)
 	// tail is the deterministic tie-breaker — without it, two surviving
-	// entries that share rank+Type would land in map iteration order
-	// and the JSON output would vary across runs (e.g. one CVE5 record
-	// emitting both cvssV3_0 and cvssV3_1, or two unranked OSV
-	// ecosystems with the same Type).
-	sort.SliceStable(out, func(i, j int) bool {
-		ri, rj := PriorityRank(out[i].source), PriorityRank(out[j].source)
-		if ri != rj {
-			return ri < rj
-		}
-		if out[i].Type != out[j].Type {
-			return out[i].Type < out[j].Type
-		}
-		if out[i].Vector != out[j].Vector {
-			return out[i].Vector < out[j].Vector
-		}
-		return out[i].Score < out[j].Score
-	})
-	res := make([]unified.Severity, len(out))
-	for i, x := range out {
-		res[i] = x.Severity
+	// entries that share rank+Type would land in map iteration order and
+	// the JSON output would vary across runs (e.g. one CVE5 record
+	// emitting both cvssV3_0 and cvssV3_1, or two unranked OSV ecosystems
+	// with the same Type).
+	sorted := stableSortByPriority(
+		deduped,
+		func(it severityItem) string { return it.source },
+		func(a, b severityItem) int {
+			if c := cmp.Compare(a.Type, b.Type); c != 0 {
+				return c
+			}
+			if c := cmp.Compare(a.Vector, b.Vector); c != 0 {
+				return c
+			}
+			return cmp.Compare(a.Score, b.Score)
+		},
+	)
+	out := make([]unified.Severity, len(sorted))
+	for i, it := range sorted {
+		out[i] = it.Severity
 	}
-	return res
+	return out
 }
