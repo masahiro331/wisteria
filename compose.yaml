@@ -18,10 +18,17 @@
 
 services:
   ollama:
-    image: ollama/ollama:latest
+    # Pinned so `docker compose pull` does not silently change the
+    # server version mid-development. Bump manually when needed.
+    image: ollama/ollama:0.21.2
     container_name: wisteria-ollama
     ports:
-      - "11434:11434"
+      # Bound to the loopback interface only so this dev helper does
+      # not expose the unauthenticated /api/chat endpoint on every
+      # host interface (shared dev box, cloud VM, lax firewall).
+      # Replace with "0.0.0.0:11434:11434" if you need external access
+      # and have other authentication in front.
+      - "127.0.0.1:11434:11434"
     volumes:
       - ${WISTERIA_OLLAMA_DIR:-${HOME}/.ollama}:/root/.ollama
     restart: unless-stopped
