@@ -201,6 +201,105 @@ func TestDebugAI_RejectsInvalidStdinJSON(t *testing.T) {
 	})
 }
 
+// runDebugAIWithFactory is runDebugAI with caller-supplied factory.
+// Use it when the test cares about what flags reach AISummarizeOptions
+// (e.g. --think wiring) or when the test wants the production
+// defaultAIFactory exercised (factory == nil).
+func runDebugAIWithFactory(t *testing.T, factory debug.AIFactory, args ...string) (stdout, stderr string, err error) {
+	t.Helper()
+	root := cmd.NewRootCmd()
+	for _, sub := range root.Commands() {
+		if sub.Name() == "debug" {
+			root.RemoveCommand(sub)
+			break
+		}
+	}
+	root.AddCommand(debug.NewCmdWithFactory(factory))
+
+	full := append([]string{"debug", "ai", "summarize"}, args...)
+	root.SetArgs(full)
+	var out, errBuf bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&errBuf)
+	err = root.ExecuteContext(context.Background())
+	return out.String(), errBuf.String(), err
+}
+
+func TestDebugAI_UnknownProviderRejected(t *testing.T) {
+	advisory := unified.UnifiedAdvisory{PrimaryID: "CVE-2024-0001"}
+	body, _ := json.Marshal(advisory)
+
+	withStdin(t, body, func() {
+		// nil factory → defaultAIFactory, which is the code path that
+		// rejects unknown providers.
+		_, _, err := runDebugAIWithFactory(t, nil, "--from-stdin", "--provider", "bogus")
+		if err == nil {
+			t.Fatal("expected error for unknown --provider")
+		}
+		if !strings.Contains(err.Error(), "unknown --provider") {
+			t.Errorf("error does not mention 'unknown --provider': %v", err)
+		}
+	})
+}
+
+func TestDebugAI_ThinkFlagReachesOptions(t *testing.T) {
+	advisory := unified.UnifiedAdvisory{PrimaryID: "CVE-2024-0001"}
+	body, _ := json.Marshal(advisory)
+
+	var captured debug.AISummarizeOptions
+	fake := &fakeSummarizer{out: sampleSummary()}
+	factory := func(opts debug.AISummarizeOptions) (ai.Summarizer, error) {
+		captured = opts
+		return fake, nil
+	}
+
+	withStdin(t, body, func() {
+		if _, _, err := runDebugAIWithFactory(t, factory, "--from-stdin", "--think"); err != nil {
+			t.Fatalf("debug ai summarize: %v", err)
+		}
+	})
+
+	if !captured.Think {
+		t.Errorf("AISummarizeOptions.Think = false, want true (--think flag should propagate)")
+	}
+}
+
+type erroringWriter struct{}
+
+func (erroringWriter) Write(_ []byte) (int, error) {
+	return 0, errors.New("write boom")
+}
+
+func TestDebugAI_StdoutEncodeErrorSurfaces(t *testing.T) {
+	advisory := unified.UnifiedAdvisory{PrimaryID: "CVE-2024-0001"}
+	body, _ := json.Marshal(advisory)
+
+	fake := &fakeSummarizer{out: sampleSummary()}
+	root := cmd.NewRootCmd()
+	for _, sub := range root.Commands() {
+		if sub.Name() == "debug" {
+			root.RemoveCommand(sub)
+			break
+		}
+	}
+	root.AddCommand(debug.NewCmdWithFactory(func(_ debug.AISummarizeOptions) (ai.Summarizer, error) {
+		return fake, nil
+	}))
+	root.SetArgs([]string{"debug", "ai", "summarize", "--from-stdin"})
+	root.SetOut(erroringWriter{})
+	root.SetErr(&bytes.Buffer{})
+
+	withStdin(t, body, func() {
+		err := root.ExecuteContext(context.Background())
+		if err == nil {
+			t.Fatal("expected error when stdout encoder fails")
+		}
+		if !strings.Contains(err.Error(), "boom") {
+			t.Errorf("error does not include underlying writer message: %v", err)
+		}
+	})
+}
+
 // withStdin replaces os.Stdin for the duration of fn with a pipe whose
 // read end yields body. Restores os.Stdin on exit.
 func withStdin(t *testing.T, body []byte, fn func()) {
