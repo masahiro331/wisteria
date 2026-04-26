@@ -1,5 +1,7 @@
 package ollama
 
+import "fmt"
+
 // AdvisoryAISummary is the structured output produced by the LLM for one
 // UnifiedAdvisory. Pointer / slice fields follow design §5: unknown string
 // fields are null, unknown array fields are []. Confidence is 0.0–1.0.
@@ -15,6 +17,36 @@ type AdvisoryAISummary struct {
 	RecommendedAction  *string  `json:"recommended_action"`
 	Confidence         float64  `json:"confidence"`
 	MissingInformation []string `json:"missing_information"`
+}
+
+// Validate enforces design §5 constraints that the JSON Schema cannot
+// fully express on the model side: confidence must be within [0, 1].
+// Schema-shape failures (wrong type, missing required field) already
+// fail at json.Unmarshal time, so Validate stays focused on value
+// ranges that the model can drift on.
+func (s *AdvisoryAISummary) Validate() error {
+	if s.Confidence < 0 || s.Confidence > 1 {
+		return fmt.Errorf("confidence %v out of range [0, 1]", s.Confidence)
+	}
+	return nil
+}
+
+// Normalize replaces nil array fields with empty slices so callers can
+// rely on len() == 0 rather than nil-checking each one. Mutates the
+// receiver in place. Existing non-nil slices are left untouched.
+func (s *AdvisoryAISummary) Normalize() {
+	if s.AffectedProducts == nil {
+		s.AffectedProducts = []string{}
+	}
+	if s.AffectedVersions == nil {
+		s.AffectedVersions = []string{}
+	}
+	if s.FixedVersions == nil {
+		s.FixedVersions = []string{}
+	}
+	if s.MissingInformation == nil {
+		s.MissingInformation = []string{}
+	}
 }
 
 // summarySchema is the JSON Schema sent in the Ollama request `format`

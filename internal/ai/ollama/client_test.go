@@ -108,19 +108,132 @@ func TestClient_Summarize_RequestFormatSchema(t *testing.T) {
 	if format["type"] != "object" {
 		t.Errorf("format.type = %v, want object", format["type"])
 	}
-	props, ok := format["properties"].(map[string]any)
-	if !ok {
-		t.Fatalf("format.properties is not an object: %T", format["properties"])
-	}
-	for _, key := range []string{
+
+	// required must enumerate every design §5 field — drop one and the
+	// model can legally omit it, which we don't want.
+	wantRequired := []string{
 		"title", "affected_products", "vulnerability_type", "impact",
 		"affected_versions", "fixed_versions", "severity",
 		"exploitation_status", "recommended_action", "confidence",
 		"missing_information",
-	} {
-		if _, ok := props[key]; !ok {
-			t.Errorf("format.properties is missing %q", key)
+	}
+	requiredAny, ok := format["required"].([]any)
+	if !ok {
+		t.Fatalf("format.required is not an array: %T", format["required"])
+	}
+	gotRequired := make(map[string]struct{}, len(requiredAny))
+	for _, v := range requiredAny {
+		s, _ := v.(string)
+		gotRequired[s] = struct{}{}
+	}
+	for _, key := range wantRequired {
+		if _, ok := gotRequired[key]; !ok {
+			t.Errorf("format.required is missing %q", key)
 		}
+	}
+	if len(requiredAny) != len(wantRequired) {
+		t.Errorf("format.required has %d entries, want %d (%v)", len(requiredAny), len(wantRequired), requiredAny)
+	}
+
+	props, ok := format["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("format.properties is not an object: %T", format["properties"])
+	}
+
+	// Per-property type assertions. Strings stay strict; nullable fields
+	// are ["string", "null"]; arrays are array-of-string; confidence is
+	// number with [0,1] bounds.
+	stringFields := []string{"title"}
+	nullableStringFields := []string{
+		"vulnerability_type", "impact", "severity",
+		"exploitation_status", "recommended_action",
+	}
+	arrayFields := []string{
+		"affected_products", "affected_versions",
+		"fixed_versions", "missing_information",
+	}
+
+	for _, key := range stringFields {
+		assertSchemaTypeEquals(t, props, key, "string")
+	}
+	for _, key := range nullableStringFields {
+		assertSchemaTypeUnion(t, props, key, []string{"string", "null"})
+	}
+	for _, key := range arrayFields {
+		assertSchemaArrayOfString(t, props, key)
+	}
+
+	conf, ok := props["confidence"].(map[string]any)
+	if !ok {
+		t.Fatalf("confidence schema is not an object: %T", props["confidence"])
+	}
+	if conf["type"] != "number" {
+		t.Errorf("confidence.type = %v, want number", conf["type"])
+	}
+	if v, ok := conf["minimum"].(float64); !ok || v != 0 {
+		t.Errorf("confidence.minimum = %v (ok=%v), want 0", conf["minimum"], ok)
+	}
+	if v, ok := conf["maximum"].(float64); !ok || v != 1 {
+		t.Errorf("confidence.maximum = %v (ok=%v), want 1", conf["maximum"], ok)
+	}
+}
+
+func assertSchemaTypeEquals(t *testing.T, props map[string]any, key, want string) {
+	t.Helper()
+	prop, ok := props[key].(map[string]any)
+	if !ok {
+		t.Errorf("%s schema is not an object: %T", key, props[key])
+		return
+	}
+	if prop["type"] != want {
+		t.Errorf("%s.type = %v, want %q", key, prop["type"], want)
+	}
+}
+
+func assertSchemaTypeUnion(t *testing.T, props map[string]any, key string, want []string) {
+	t.Helper()
+	prop, ok := props[key].(map[string]any)
+	if !ok {
+		t.Errorf("%s schema is not an object: %T", key, props[key])
+		return
+	}
+	gotAny, ok := prop["type"].([]any)
+	if !ok {
+		t.Errorf("%s.type is not an array: %T (%v)", key, prop["type"], prop["type"])
+		return
+	}
+	got := make(map[string]struct{}, len(gotAny))
+	for _, v := range gotAny {
+		s, _ := v.(string)
+		got[s] = struct{}{}
+	}
+	for _, w := range want {
+		if _, ok := got[w]; !ok {
+			t.Errorf("%s.type missing %q (got %v)", key, w, gotAny)
+		}
+	}
+	if len(gotAny) != len(want) {
+		t.Errorf("%s.type has %d entries, want %d (%v)", key, len(gotAny), len(want), gotAny)
+	}
+}
+
+func assertSchemaArrayOfString(t *testing.T, props map[string]any, key string) {
+	t.Helper()
+	prop, ok := props[key].(map[string]any)
+	if !ok {
+		t.Errorf("%s schema is not an object: %T", key, props[key])
+		return
+	}
+	if prop["type"] != "array" {
+		t.Errorf("%s.type = %v, want array", key, prop["type"])
+	}
+	items, ok := prop["items"].(map[string]any)
+	if !ok {
+		t.Errorf("%s.items is not an object: %T", key, prop["items"])
+		return
+	}
+	if items["type"] != "string" {
+		t.Errorf("%s.items.type = %v, want string", key, items["type"])
 	}
 }
 
@@ -227,6 +340,62 @@ func TestClient_Summarize_DecodesContent(t *testing.T) {
 	}
 	if out.Confidence != 0.8 {
 		t.Errorf("Confidence = %v", out.Confidence)
+	}
+}
+
+func TestClient_Summarize_NormalizesNilArrays(t *testing.T) {
+	t.Parallel()
+
+	// Model omits the array fields entirely → JSON unmarshal leaves them
+	// as nil slices. Summarize must normalize them to empty slices per
+	// design §5 ("unknown array fields are []").
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		resp := map[string]any{
+			"message": map[string]any{
+				"content": `{"title":"x","confidence":0.1}`,
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	t.Cleanup(srv.Close)
+
+	c := &ollama.Client{Endpoint: srv.URL}
+	out, err := c.Summarize(context.Background(), sampleAdvisory())
+	if err != nil {
+		t.Fatalf("Summarize: %v", err)
+	}
+	for name, arr := range map[string][]string{
+		"AffectedProducts":   out.AffectedProducts,
+		"AffectedVersions":   out.AffectedVersions,
+		"FixedVersions":      out.FixedVersions,
+		"MissingInformation": out.MissingInformation,
+	} {
+		if arr == nil {
+			t.Errorf("%s is nil after Summarize, want empty slice", name)
+		}
+	}
+}
+
+func TestClient_Summarize_RejectsOutOfRangeConfidence(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		resp := map[string]any{
+			"message": map[string]any{
+				"content": `{"title":"x","affected_products":[],"affected_versions":[],"fixed_versions":[],"missing_information":[],"confidence":2.5}`,
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	t.Cleanup(srv.Close)
+
+	c := &ollama.Client{Endpoint: srv.URL}
+	_, err := c.Summarize(context.Background(), sampleAdvisory())
+	if err == nil {
+		t.Fatal("Summarize returned nil error, want validation error for out-of-range confidence")
+	}
+	if !strings.Contains(err.Error(), "confidence") {
+		t.Errorf("error does not mention confidence: %v", err)
 	}
 }
 

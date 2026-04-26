@@ -38,10 +38,12 @@ const (
 		"Prefer concrete affected products, versions, fixed versions, impact, and recommended action."
 )
 
-// Client calls a local Ollama HTTP endpoint. Zero value is not usable;
-// callers should set Endpoint (or rely on the default localhost) and
-// optionally override Model and HTTP. Safe for concurrent use as long
-// as the underlying http.Client is.
+// Client calls a local Ollama HTTP endpoint. The zero value is usable
+// and resolves to Endpoint=http://localhost:11434, Model=qwen3:8b, and
+// HTTP=http.DefaultClient; set the fields explicitly to override any of
+// them (typically Endpoint in tests, Model when falling back to a
+// smaller variant per design §3 fallback). Safe for concurrent use as
+// long as the underlying http.Client is.
 type Client struct {
 	Endpoint string       // default: http://localhost:11434
 	Model    string       // default: qwen3:8b
@@ -124,6 +126,10 @@ func (c *Client) Summarize(ctx context.Context, advisory unified.UnifiedAdvisory
 	var summary AdvisoryAISummary
 	if err := json.Unmarshal([]byte(decoded.Message.Content), &summary); err != nil {
 		return nil, fmt.Errorf("decode model content: %w (raw: %s)", err, decoded.Message.Content)
+	}
+	summary.Normalize()
+	if err := summary.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid model output: %w (raw: %s)", err, decoded.Message.Content)
 	}
 	return &summary, nil
 }
