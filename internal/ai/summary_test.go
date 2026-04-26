@@ -1,16 +1,16 @@
-package ollama_test
+package ai_test
 
 import (
 	"strings"
 	"testing"
 
-	"github.com/masahiro331/wisteria/internal/ai/ollama"
+	"github.com/masahiro331/wisteria/internal/ai"
 )
 
 func TestAdvisoryAISummary_Validate_AcceptsValidConfidence(t *testing.T) {
 	t.Parallel()
 	for _, c := range []float64{0, 0.5, 1} {
-		s := ollama.AdvisoryAISummary{Title: "x", Confidence: c}
+		s := ai.AdvisoryAISummary{Title: "x", Confidence: c}
 		if err := s.Validate(); err != nil {
 			t.Errorf("Validate(confidence=%v) returned %v, want nil", c, err)
 		}
@@ -20,7 +20,7 @@ func TestAdvisoryAISummary_Validate_AcceptsValidConfidence(t *testing.T) {
 func TestAdvisoryAISummary_Validate_RejectsOutOfRangeConfidence(t *testing.T) {
 	t.Parallel()
 	for _, c := range []float64{-0.01, 1.01, 2, -1} {
-		s := ollama.AdvisoryAISummary{Title: "x", Confidence: c}
+		s := ai.AdvisoryAISummary{Title: "x", Confidence: c}
 		err := s.Validate()
 		if err == nil {
 			t.Errorf("Validate(confidence=%v) returned nil, want error", c)
@@ -34,7 +34,7 @@ func TestAdvisoryAISummary_Validate_RejectsOutOfRangeConfidence(t *testing.T) {
 
 func TestAdvisoryAISummary_Validate_RejectsEmptyTitle(t *testing.T) {
 	t.Parallel()
-	s := ollama.AdvisoryAISummary{Title: "", Confidence: 0.5}
+	s := ai.AdvisoryAISummary{Title: "", Confidence: 0.5}
 	err := s.Validate()
 	if err == nil {
 		t.Fatal("Validate(title=\"\") returned nil, want error")
@@ -46,7 +46,7 @@ func TestAdvisoryAISummary_Validate_RejectsEmptyTitle(t *testing.T) {
 
 func TestAdvisoryAISummary_Normalize_ReplacesNilArraysWithEmpty(t *testing.T) {
 	t.Parallel()
-	s := ollama.AdvisoryAISummary{
+	s := ai.AdvisoryAISummary{
 		AffectedProducts:   nil,
 		AffectedVersions:   nil,
 		FixedVersions:      nil,
@@ -74,7 +74,7 @@ func TestAdvisoryAISummary_Normalize_ReplacesNilArraysWithEmpty(t *testing.T) {
 
 func TestAdvisoryAISummary_Normalize_PreservesExistingValues(t *testing.T) {
 	t.Parallel()
-	s := ollama.AdvisoryAISummary{
+	s := ai.AdvisoryAISummary{
 		AffectedProducts:   []string{"libfoo"},
 		AffectedVersions:   []string{"<1.2"},
 		FixedVersions:      []string{"1.2"},
