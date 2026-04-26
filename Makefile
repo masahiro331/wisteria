@@ -1,9 +1,13 @@
 .PHONY: build test fmt vet tidy lint setup clean
 
-BINARY := wisteria
+BIN_DIR := bin
+BINARY  := $(BIN_DIR)/wisteria
 
-build:
+build: | $(BIN_DIR)
 	go build -o $(BINARY) .
+
+$(BIN_DIR):
+	mkdir -p $(BIN_DIR)
 
 test:
 	go test ./...
@@ -25,3 +29,4 @@ setup:
 
 clean:
 	rm -f $(BINARY)
+	rmdir $(BIN_DIR) 2>/dev/null || true

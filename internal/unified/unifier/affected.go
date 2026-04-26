@@ -1,7 +1,7 @@
 package unifier
 
 import (
-	"sort"
+	"cmp"
 
 	"github.com/masahiro331/wisteria/internal/unified"
 )
@@ -21,28 +21,17 @@ type affectedItem struct {
 // reproducibility for the common case of one source emitting N
 // AffectedRecords with identical Provenance.
 func mergeAffected(in []affectedItem) []unified.AffectedRecord {
-	if len(in) == 0 {
+	sorted := stableSortByPriority(
+		in,
+		func(it affectedItem) string { return it.source },
+		func(a, b affectedItem) int { return cmp.Compare(a.record.From.ID, b.record.From.ID) },
+	)
+	if sorted == nil {
 		return nil
 	}
-	indices := make([]int, len(in))
-	for i := range in {
-		indices[i] = i
-	}
-	sort.SliceStable(indices, func(a, b int) bool {
-		ia, ib := indices[a], indices[b]
-		ra, rb := PriorityRank(in[ia].source), PriorityRank(in[ib].source)
-		if ra != rb {
-			return ra < rb
-		}
-		ida, idb := in[ia].record.From.ID, in[ib].record.From.ID
-		if ida != idb {
-			return ida < idb
-		}
-		return ia < ib
-	})
-	out := make([]unified.AffectedRecord, len(in))
-	for i, idx := range indices {
-		out[i] = in[idx].record
+	out := make([]unified.AffectedRecord, len(sorted))
+	for i, it := range sorted {
+		out[i] = it.record
 	}
 	return out
 }

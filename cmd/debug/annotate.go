@@ -1,9 +1,7 @@
 package debug
 
 import (
-	"fmt"
 	"path/filepath"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -24,7 +22,7 @@ import (
 // whatever they already had (this command does not clear stale
 // annotations).
 func newAnnotateCmd() *cobra.Command {
-	c := &cobra.Command{
+	return &cobra.Command{
 		Use:   "annotate",
 		Short: "Run Stage 4 (KEV + EPSS + ExploitDB) against an existing unified/ tree",
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -38,29 +36,7 @@ func newAnnotateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
-			ctx := cmd.Context()
-
-			t0 := time.Now()
-			if err := annotator.AnnotateKEV(ctx, sourcesRoot, outDir); err != nil {
-				return fmt.Errorf("annotator.AnnotateKEV: %w", err)
-			}
-			fmt.Fprintf(out, "annotate kev:       %s\n", time.Since(t0).Round(time.Millisecond))
-
-			t1 := time.Now()
-			if err := annotator.AnnotateEPSS(ctx, sourcesRoot, outDir); err != nil {
-				return fmt.Errorf("annotator.AnnotateEPSS: %w", err)
-			}
-			fmt.Fprintf(out, "annotate epss:      %s\n", time.Since(t1).Round(time.Millisecond))
-
-			t2 := time.Now()
-			if err := annotator.AnnotateExploitDB(ctx, sourcesRoot, outDir); err != nil {
-				return fmt.Errorf("annotator.AnnotateExploitDB: %w", err)
-			}
-			fmt.Fprintf(out, "annotate exploitdb: %s\n", time.Since(t2).Round(time.Millisecond))
-
-			return nil
+			return annotator.RunAll(cmd.Context(), sourcesRoot, outDir, cmd.OutOrStdout(), "")
 		},
 	}
-	return c
 }

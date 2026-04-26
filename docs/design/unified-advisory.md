@@ -248,7 +248,7 @@ type UnifiedAdvisory struct {
 }
 ```
 
-OSV / CVE / KEV の struct は **upstream の全フィールドを typed field として明示する** (1 byte も落とさない方針)。`json.RawMessage` の catch-all は使わない。upstream schema に新フィールドが入った場合は struct を追加して対応する。検証は `debug/schema-coverage` (typed parse → re-marshal を interface{} parse → re-marshal と diff、upstream の `null` / `[]` / `{}` / Go zero time string は absent と等価扱い、最大 3 件のサンプル file path を表示) を都度回し、漏れがゼロであることを確認する。
+OSV / CVE / KEV の struct は **upstream の全フィールドを typed field として明示する** (1 byte も落とさない方針)。`json.RawMessage` の catch-all は使わない。upstream schema に新フィールドが入った場合は struct を追加して対応する。検証は `tools/schema-coverage` (typed parse → re-marshal を interface{} parse → re-marshal と diff、upstream の `null` / `[]` / `{}` / Go zero time string は absent と等価扱い、最大 3 件のサンプル file path を表示) を都度回し、漏れがゼロであることを確認する。
 
 例外として、以下のフィールドは upstream で構造が一定でないため `json.RawMessage` 維持を許容する。新規追加時は本リスト + 該当 schema 定義のコメントに理由を記録する:
 
