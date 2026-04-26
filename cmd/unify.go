@@ -25,7 +25,8 @@ import (
 // size, not by the total record count (currently ~900k). --concurrency
 // controls both the walker pool and the unify→write fan-out (default
 // 4× NumCPU; I/O-bound). Stage 4 (annotator.AnnotateKEV →
-// AnnotateEPSS) attaches signal data after Stage 3.
+// AnnotateEPSS → AnnotateExploitDB) attaches signal data after
+// Stage 3.
 func newUnifyCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "unify",
@@ -112,6 +113,13 @@ func newUnifyCmd() *cobra.Command {
 			}
 			fmt.Fprintf(out, "stage 4 (annotate epss): %s\n",
 				time.Since(t3).Round(time.Millisecond))
+
+			t4 := time.Now()
+			if err := annotator.AnnotateExploitDB(ctx, sourcesRoot, outDir); err != nil {
+				return fmt.Errorf("annotator.AnnotateExploitDB: %w", err)
+			}
+			fmt.Fprintf(out, "stage 4 (annotate exploitdb): %s\n",
+				time.Since(t4).Round(time.Millisecond))
 
 			fmt.Fprintf(out, "total: %s; wrote %d advisories to %s\n",
 				time.Since(t0).Round(time.Millisecond), len(index), outDir)

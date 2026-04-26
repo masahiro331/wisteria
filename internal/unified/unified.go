@@ -18,10 +18,11 @@ import (
 type SourceKind string
 
 const (
-	SourceOSV  SourceKind = "osv"
-	SourceCVE  SourceKind = "cve"
-	SourceKEV  SourceKind = "kev"
-	SourceEPSS SourceKind = "epss"
+	SourceOSV       SourceKind = "osv"
+	SourceCVE       SourceKind = "cve"
+	SourceKEV       SourceKind = "kev"
+	SourceEPSS      SourceKind = "epss"
+	SourceExploitDB SourceKind = "exploitdb"
 )
 
 // Provenance is the "where did this come from" trail attached to every
@@ -105,17 +106,34 @@ type KEVRecord struct {
 	CWEs                       []string   `json:"cwes,omitempty"`
 }
 
+// ExploitDBRecord is one row of the Exploit-DB files_exploits.csv catalog.
+// Stage 4 attaches one or more of these to an existing UnifiedAdvisory:
+// a single CVE-ID can have multiple EDB-IDs (different platforms,
+// different researchers), so UnifiedAdvisory.Exploits is a slice and
+// the catalog's natural row order is preserved.
+type ExploitDBRecord struct {
+	From          Provenance `json:"from"`
+	ID            int        `json:"id"`             // EDB-ID
+	URL           string     `json:"url"`            // https://www.exploit-db.com/exploits/<id>
+	Title         string     `json:"title"`          // CSV "description"
+	DatePublished string     `json:"date_published"` // YYYY-MM-DD
+	Type          string     `json:"type,omitempty"`
+	Platform      string     `json:"platform,omitempty"`
+	Verified      bool       `json:"verified"`
+}
+
 // UnifiedAdvisory is the merged record keyed by PrimaryID. SourceIDs holds
 // every other identifier the same vuln is known by (dedup + sorted), so a
 // caller searching by GHSA / PYSEC / ALBA still finds the CVE-keyed file.
 type UnifiedAdvisory struct {
-	PrimaryID    string           `json:"primary_id"`
-	SourceIDs    []string         `json:"source_ids,omitempty"`
-	Descriptions []Description    `json:"descriptions"`
-	References   []Reference      `json:"references"`
-	Severities   []Severity       `json:"severities"`
-	Affected     []AffectedRecord `json:"affected"`
-	KEV          *KEVRecord       `json:"kev,omitempty"`
-	EPSS         *EPSSScore       `json:"epss,omitempty"`
-	Provenances  []Provenance     `json:"provenances"`
+	PrimaryID    string            `json:"primary_id"`
+	SourceIDs    []string          `json:"source_ids,omitempty"`
+	Descriptions []Description     `json:"descriptions"`
+	References   []Reference       `json:"references"`
+	Severities   []Severity        `json:"severities"`
+	Affected     []AffectedRecord  `json:"affected"`
+	KEV          *KEVRecord        `json:"kev,omitempty"`
+	EPSS         *EPSSScore        `json:"epss,omitempty"`
+	Exploits     []ExploitDBRecord `json:"exploits,omitempty"`
+	Provenances  []Provenance      `json:"provenances"`
 }
