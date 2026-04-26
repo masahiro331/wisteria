@@ -21,9 +21,9 @@ type AdvisoryAISummary struct {
 
 // Validate enforces design §5 constraints that the JSON Schema cannot
 // fully express on the model side: confidence must be within [0, 1].
-// Schema-shape failures (wrong type, missing required field) already
-// fail at json.Unmarshal time, so Validate stays focused on value
-// ranges that the model can drift on.
+// JSON type mismatches fail earlier at json.Unmarshal time. Missing
+// array fields are tolerated and normalized to empty slices by
+// Normalize, so they do not show up here.
 func (s *AdvisoryAISummary) Validate() error {
 	if s.Confidence < 0 || s.Confidence > 1 {
 		return fmt.Errorf("confidence %v out of range [0, 1]", s.Confidence)
