@@ -97,8 +97,11 @@ func Run(ctx context.Context, cacheDir string, opts Options, w io.Writer) error 
 	logf(w, "stage 2+3 (merge+write): %s\n",
 		time.Since(t1).Round(time.Millisecond))
 
-	// Stage 4: annotate.
-	if err := annotator.RunAll(ctx, sourcesRoot, outDir, w); err != nil {
+	// Stage 4: annotate. The "stage 4 " prefix on each annotator
+	// timing line keeps the unify CLI output aligned with the
+	// "stage 1" / "stage 2+3" banners above; the debug annotate
+	// command runs Stage 4 in isolation so it passes "" instead.
+	if err := annotator.RunAll(ctx, sourcesRoot, outDir, w, "stage 4 "); err != nil {
 		return err
 	}
 

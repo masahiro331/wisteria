@@ -36,7 +36,7 @@ func newAnnotateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return annotator.RunAll(cmd.Context(), sourcesRoot, outDir, cmd.OutOrStdout())
+			return annotator.RunAll(cmd.Context(), sourcesRoot, outDir, cmd.OutOrStdout(), "")
 		},
 	}
 }

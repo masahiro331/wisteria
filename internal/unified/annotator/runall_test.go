@@ -30,7 +30,7 @@ func TestRunAll_RunsAllThreeAnnotators(t *testing.T) {
 	target := writeUnifiedCVE(t, outDir, "CVE-2024-0001")
 
 	var buf bytes.Buffer
-	if err := annotator.RunAll(context.Background(), sourcesRoot, outDir, &buf); err != nil {
+	if err := annotator.RunAll(context.Background(), sourcesRoot, outDir, &buf, ""); err != nil {
 		t.Fatalf("RunAll: %v", err)
 	}
 
@@ -53,12 +53,34 @@ func TestRunAll_RunsAllThreeAnnotators(t *testing.T) {
 	}
 
 	// The progress writer should mention every stage so callers (cmd/unify,
-	// cmd/debug/annotate) get the same per-stage timing line they had
-	// before the refactor.
+	// cmd/debug/annotate) get a per-stage timing line.
 	out := buf.String()
 	for _, want := range []string{"kev", "epss", "exploitdb"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("RunAll output missing %q stage line; got:\n%s", want, out)
+		}
+	}
+}
+
+func TestRunAll_LinePrefixWrapsTimingLines(t *testing.T) {
+	// linePrefix lets cmd/unify keep its old "stage 4 (annotate kev): ..."
+	// banner shape while cmd/debug/annotate (no prefix) keeps its
+	// shorter "annotate kev: ..." shape. The annotate-stage label and
+	// duration formatting are owned by RunAll; the prefix is everything
+	// before it, applied verbatim.
+	root := t.TempDir()
+	sourcesRoot := filepath.Join(root, "sources")
+	outDir := filepath.Join(root, "unified")
+	writeUnifiedCVE(t, outDir, "CVE-2024-0001")
+
+	var buf bytes.Buffer
+	if err := annotator.RunAll(context.Background(), sourcesRoot, outDir, &buf, "stage 4 "); err != nil {
+		t.Fatalf("RunAll: %v", err)
+	}
+	out := buf.String()
+	for _, line := range []string{"stage 4 annotate kev:", "stage 4 annotate epss:", "stage 4 annotate exploitdb:"} {
+		if !strings.Contains(out, line) {
+			t.Errorf("RunAll output missing %q; got:\n%s", line, out)
 		}
 	}
 }
@@ -71,7 +93,7 @@ func TestRunAll_NilWriterIsAccepted(t *testing.T) {
 	// No catalogs at all → all three annotators are no-ops; passing
 	// nil io.Writer must not panic. Some callers (tests, scripts) don't
 	// want timing output.
-	if err := annotator.RunAll(context.Background(), sourcesRoot, outDir, nil); err != nil {
+	if err := annotator.RunAll(context.Background(), sourcesRoot, outDir, nil, ""); err != nil {
 		t.Fatalf("RunAll with nil writer: %v", err)
 	}
 }
@@ -86,7 +108,7 @@ func TestRunAll_StopsOnFirstError(t *testing.T) {
 	writeKEVCatalog(t, sourcesRoot, `{not json`)
 
 	var buf bytes.Buffer
-	err := annotator.RunAll(context.Background(), sourcesRoot, outDir, &buf)
+	err := annotator.RunAll(context.Background(), sourcesRoot, outDir, &buf, "")
 	if err == nil {
 		t.Fatal("expected RunAll to surface the KEV parse error")
 	}
