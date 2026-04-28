@@ -13,7 +13,7 @@ import (
 // IndexEntry without re-implementing the format.
 func SourceTag(kind unified.SourceKind, source string) string {
 	if kind == unified.SourceCVE {
-		return cveSourceTag
+		return SourceCVEMitre
 	}
 	return string(kind) + "." + source
 }
@@ -76,7 +76,7 @@ func CVEMetrics(in []cve.Metric, from unified.Provenance) []severityItem {
 				Score:  formatScore(c.BaseScore),
 				From:   from,
 			},
-			source: cveSourceTag,
+			source: SourceCVEMitre,
 		})
 	}
 	for _, m := range in {
@@ -126,7 +126,7 @@ func CVEDescriptions(in []cve.Description, from unified.Provenance) []descriptio
 	for _, d := range in {
 		out = append(out, descriptionItem{
 			Description: unified.Description{Lang: d.Lang, Text: d.Value, From: from},
-			source:      cveSourceTag,
+			source:      SourceCVEMitre,
 		})
 	}
 	return out
@@ -153,7 +153,7 @@ func CVEAffectedRecords(in []cve.Affected, from unified.Provenance) []affectedIt
 		aff := in[i]
 		out = append(out, affectedItem{
 			record: unified.AffectedRecord{From: from, CVE: &aff},
-			source: cveSourceTag,
+			source: SourceCVEMitre,
 		})
 	}
 	return out
