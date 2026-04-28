@@ -3,7 +3,9 @@
 # scripts/setup.sh — install local development tooling.
 #
 # Installs:
-#   - golangci-lint (pinned version) into $(go env GOPATH)/bin
+#   - golangci-lint (pinned version) into $(go env GOPATH)/bin, built from
+#     source with the local Go toolchain so the linter and the project share
+#     one Go version (avoids the toolchain mismatch in #36)
 #   - .git/hooks/pre-commit that runs `make lint`
 
 set -euo pipefail
@@ -22,17 +24,18 @@ gobin="$(go env GOPATH)/bin"
 mkdir -p "${gobin}"
 
 install_golangci_lint() {
-  if command -v golangci-lint >/dev/null 2>&1; then
+  local target="${gobin}/golangci-lint"
+  if [[ -x "${target}" ]]; then
     local current
-    current="$(golangci-lint --version 2>/dev/null | awk '{print $4}' || true)"
+    current="$("${target}" --version 2>/dev/null | awk '{print $4}' || true)"
     if [[ "${current}" == "${GOLANGCI_LINT_VERSION#v}" ]]; then
-      echo "golangci-lint ${GOLANGCI_LINT_VERSION} is already installed"
+      echo "golangci-lint ${GOLANGCI_LINT_VERSION} is already installed at ${target}"
       return
     fi
   fi
-  echo "Installing golangci-lint ${GOLANGCI_LINT_VERSION} into ${gobin}"
-  curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
-    | sh -s -- -b "${gobin}" "${GOLANGCI_LINT_VERSION}"
+  echo "Installing golangci-lint ${GOLANGCI_LINT_VERSION} into ${gobin} via 'go install'"
+  GOBIN="${gobin}" go install \
+    "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}"
 }
 
 install_pre_commit_hook() {
