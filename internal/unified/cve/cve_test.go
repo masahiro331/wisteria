@@ -469,3 +469,130 @@ func TestUnmarshal_AcceptsCVSSv30AndV40(t *testing.T) {
 		t.Errorf("CVSSv40 = %#v", m[1].CVSSv40)
 	}
 }
+
+// TestRoundTrip_ProblemDescriptionReferences pins the §7 "1 byte not
+// lost" rule for the nested references[] under
+// problemTypes[].descriptions[]. CVE5 schema's ProblemDescription has a
+// $ref:"#/definitions/references" field that we previously dropped.
+//
+// The assertion is structural rather than byte-equal: parse → access
+// the typed field → re-marshal → re-parse and compare. Byte-equality
+// on encoding/json output is not safe (key order on map types varies)
+// but the round-trip identity through the typed schema is the actual
+// "1 byte not lost" contract we care about.
+func TestRoundTrip_ProblemDescriptionReferences(t *testing.T) {
+	const body = `{
+		"dataType": "CVE_RECORD",
+		"dataVersion": "5.1",
+		"cveMetadata": {
+			"cveId": "CVE-2024-9999",
+			"assignerOrgId": "test",
+			"state": "PUBLISHED"
+		},
+		"containers": {
+			"cna": {
+				"problemTypes": [
+					{
+						"descriptions": [
+							{
+								"lang": "en",
+								"description": "Improper Input Validation",
+								"cweId": "CWE-20",
+								"type": "CWE",
+								"references": [
+									{"url": "https://cwe.mitre.org/data/definitions/20.html", "tags": ["technical-description"]},
+									{"url": "https://example.com/research", "name": "Research note"}
+								]
+							}
+						]
+					}
+				]
+			}
+		}
+	}`
+
+	var rec Record
+	if err := json.Unmarshal([]byte(body), &rec); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if got := len(rec.Containers.CNA.ProblemTypes); got != 1 {
+		t.Fatalf("ProblemTypes len = %d, want 1", got)
+	}
+	descs := rec.Containers.CNA.ProblemTypes[0].Descriptions
+	if got := len(descs); got != 1 {
+		t.Fatalf("Descriptions len = %d, want 1", got)
+	}
+	refs := descs[0].References
+	if got := len(refs); got != 2 {
+		t.Fatalf("References len = %d, want 2 (round-trip dropped them)", got)
+	}
+	if refs[0].URL != "https://cwe.mitre.org/data/definitions/20.html" {
+		t.Errorf("refs[0].URL = %q", refs[0].URL)
+	}
+	if len(refs[0].Tags) != 1 || refs[0].Tags[0] != "technical-description" {
+		t.Errorf("refs[0].Tags = %#v", refs[0].Tags)
+	}
+	if refs[1].URL != "https://example.com/research" || refs[1].Name != "Research note" {
+		t.Errorf("refs[1] = %#v", refs[1])
+	}
+
+	// Re-marshal then re-parse so we catch the case where Reference
+	// is reachable via the typed field but a missing JSON tag would
+	// silently drop it on the way out.
+	roundTripped, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var rec2 Record
+	if err := json.Unmarshal(roundTripped, &rec2); err != nil {
+		t.Fatalf("re-unmarshal: %v", err)
+	}
+	refs2 := rec2.Containers.CNA.ProblemTypes[0].Descriptions[0].References
+	if len(refs2) != 2 || refs2[0].URL != refs[0].URL || refs2[1].URL != refs[1].URL {
+		t.Errorf("round-trip lost references: got %#v", refs2)
+	}
+
+	// Stronger guard against the §7 contract: assert against the raw
+	// JSON shape of the re-marshaled record so a future rename of the
+	// `references` / `url` / `tags` / `name` JSON tags is caught even
+	// though both encode and decode legs would still round-trip cleanly
+	// through the Go struct itself.
+	assertRawProblemDescriptionReferences(t, roundTripped)
+}
+
+// assertRawProblemDescriptionReferences decodes the re-marshaled bytes
+// into a generic map and pins the expected key names and values at the
+// problemTypes[].descriptions[].references[] depth. Split out of the
+// test body so the round-trip flow stays readable and to keep the test
+// function below the project's cyclomatic-complexity gate.
+func assertRawProblemDescriptionReferences(t *testing.T, roundTripped []byte) {
+	t.Helper()
+	var rawTree map[string]any
+	if err := json.Unmarshal(roundTripped, &rawTree); err != nil {
+		t.Fatalf("raw re-unmarshal: %v", err)
+	}
+	gotRefs := rawTree["containers"].(map[string]any)["cna"].(map[string]any)["problemTypes"].([]any)[0].(map[string]any)["descriptions"].([]any)[0].(map[string]any)["references"]
+	gotRefList, ok := gotRefs.([]any)
+	if !ok {
+		t.Fatalf("re-marshaled JSON has no `references` key under problemTypes[].descriptions[]: %v", rawTree)
+	}
+	if len(gotRefList) != 2 {
+		t.Fatalf("references[] len = %d, want 2", len(gotRefList))
+	}
+	first := gotRefList[0].(map[string]any)
+	if first["url"] != "https://cwe.mitre.org/data/definitions/20.html" {
+		t.Errorf("first.url = %q", first["url"])
+	}
+	firstTags, _ := first["tags"].([]any)
+	if len(firstTags) != 1 || firstTags[0] != "technical-description" {
+		t.Errorf("first.tags = %#v", first["tags"])
+	}
+	second := gotRefList[1].(map[string]any)
+	if second["url"] != "https://example.com/research" {
+		t.Errorf("second.url = %q", second["url"])
+	}
+	if second["name"] != "Research note" {
+		t.Errorf("second.name = %q", second["name"])
+	}
+}
