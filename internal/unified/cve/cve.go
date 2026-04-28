@@ -351,10 +351,15 @@ type ProblemType struct {
 	Descriptions []ProblemDescription `json:"descriptions,omitempty"`
 }
 
-// ProblemDescription is one labeled problem-type entry.
+// ProblemDescription is one labeled problem-type entry. The
+// References slice mirrors the top-level Reference shape and matches
+// CVE5 schema's $ref:"#/definitions/references" — some CNAs attach
+// CWE / advisory links here instead of (or in addition to) the
+// record-level references[].
 type ProblemDescription struct {
-	Type        string `json:"type,omitempty"`
-	Lang        string `json:"lang,omitempty"`
-	Description string `json:"description,omitempty"`
-	CWEID       string `json:"cweId,omitempty"`
+	Type        string      `json:"type,omitempty"`
+	Lang        string      `json:"lang,omitempty"`
+	Description string      `json:"description,omitempty"`
+	CWEID       string      `json:"cweId,omitempty"`
+	References  []Reference `json:"references,omitempty"`
 }
