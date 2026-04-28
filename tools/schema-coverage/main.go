@@ -25,8 +25,9 @@
 //	[CVE5] no missing fields detected ✅
 //	[KEV] no missing fields detected ✅
 //
-// EPSS is not covered: its parser is a fixed CSV, not JSON, so the
-// "interface{} round-trip" approach does not apply.
+// EPSS and Exploit-DB are not covered: their parsers read fixed CSV
+// schemas, not JSON, so the "interface{} round-trip" approach does
+// not apply.
 package main
 
 import (

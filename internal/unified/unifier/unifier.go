@@ -34,7 +34,8 @@ import (
 // per-field merge rules (References §8.2, Descriptions §8.3, Severities
 // §8.4, Affected §8.5). SourceIDs (every alias other than the PrimaryID,
 // deduped + lex-sorted) are collected here in the same pass so each OSV
-// file is read at most once. KEV / EPSS land in #20 / #21.
+// file is read at most once. KEV / EPSS / Exploit-DB are not merged
+// here — they are attached in Stage 4 (annotator package).
 //
 // CVE5 records contribute one Provenance per container (the CNA plus
 // each ADP, e.g. CISA Vulnrichment). ADP IDs are suffixed with

@@ -36,8 +36,10 @@ Debug (developer-only, ships in the same binary):
 wisteria debug index [--id <PrimaryID>]
 wisteria debug unify --id <PrimaryID> | --sample N
 wisteria debug annotate
-wisteria debug ai summarize --id <PrimaryID> | --from-stdin
+wisteria debug ai summarize --id <CVE-ID> | --from-stdin
 ```
+
+The `debug ai summarize` command currently only resolves CVE-ID lookups; standalone PrimaryID support is a follow-up. It also accepts provider knobs (`--provider`, `--model`, `--endpoint`, `--think`) for swapping the underlying summarizer.
 
 Common flags (see `wisteria <cmd> --help` for the full list):
 - `--cache-dir` — override the on-disk root.

@@ -1,25 +1,25 @@
 # 設計: Unified Advisory
 
-Phase 1 で取得した OSV / MITRE CVEListV5 のローカル JSON を walker で走査し、PrimaryID をキーに各ソースの advisory を 1 レコードへフィールド単位で semantic merge する。CISA KEV カタログ / FIRST EPSS スコアは別経路で扱い、merge 後の unified ファイルに後付けでアノテートする (Stage 4, §5.2)。
+Phase 1 で取得した OSV / MITRE CVEListV5 のローカル JSON を walker で走査し、PrimaryID をキーに各ソースの advisory を 1 レコードへフィールド単位で semantic merge する。CISA KEV カタログ / FIRST EPSS スコア / Exploit-DB は別経路で扱い、merge 後の unified ファイルに後付けでアノテートする (Stage 4, §5.2)。
 
-関連: `docs/SYSTEM_OVERVIEW.md`、`docs/ROADMAP.md` (Phase 1)
+関連: `docs/SYSTEM_OVERVIEW.md`、`docs/ROADMAP.md`
 
 ## 1. ゴール
 
 - fetch 済みディレクトリ (OSV / CVE5) を walk して `map[PrimaryID][]IndexEntry` の索引を作る (Stage 1)。
 - 索引を元に各ファイルを full parse し、フィールド単位で semantic merge した UnifiedAdvisory を構築する (Stage 2)。
 - UnifiedAdvisory を PrimaryID 別の JSON ファイルとして書き出す (Stage 3)。
-- 既存 unified ファイルに KEV カタログ / EPSS スコアを後付けでアノテートする (Stage 4)。
+- 既存 unified ファイルに KEV / EPSS / Exploit-DB シグナルを後付けでアノテートする (Stage 4)。
 - CVE-ID を持たない advisory (AlmaLinux ALBA-*、Go GO-* など) も保持する。
 - Phase 2 (AI 処理) と Phase 3 (DB 投入) の入力となる中間表現を提供する。
-- 同じロジックを `wisteria debug` から個別に叩けるようにし、マージルールの妥当性を実データで検証できるようにする。
+- 同じロジックを `wisteria debug` から個別に叩けるようにし、マージルールの挙動を実データで検証できるようにする。
 
 ## 2. 非ゴール
 
 - AI による要約・ラベリング・exploit 解析 (Phase 2)
 - PostgreSQL への投入 (Phase 3)
 - 増分更新 (毎回フル再構築する)
-- OSV / CVE 以外のソース (NVD など)
+- OSV / CVE5 / KEV / EPSS / Exploit-DB 以外のソース (NVD など)
 - 各フィールドの最終正規化 (severity 表記の統一など、Phase 2 で AI に吸収させる)
 
 ## 3. 用語
@@ -58,16 +58,18 @@ KEV / EPSS は walker / unifier (Stage 1-3) では扱わない。Stage 4 (Annota
 │   ├── osv/<ecosystem>/*.json
 │   ├── cve/cvelistV5-main/cves/<year>/<bucket>/CVE-*.json
 │   ├── kev/known_exploited_vulnerabilities.json
-│   └── epss/epss_scores-current.csv           ← gzip 展開後の plain CSV
+│   ├── epss/epss_scores-current.csv           ← gzip 展開後の plain CSV
+│   └── exploitdb/files_exploits.csv
 └── unified/                                    ← merge 後 (本設計の出力)
     ├── cve/<year>/<CVE-ID>.json                ← PrimaryID が CVE-ID
     └── standalone/<ecosystem>/<id>.json        ← PrimaryID が source 由来 ID
 ```
 
 - `<year>` は CVE-ID (`CVE-YYYY-NNNN`) から抽出。1 ディレクトリのファイル数を抑え FS / ツール (ls, grep) を実用範囲に保つ。
-- `<ecosystem>` は walker が `IndexEntry.Source` に格納する正規化済み値 (例: `AlmaLinux`、`Go`、`PyPI`、`Rocky_Linux`)。upstream の OSV ディレクトリ名のうちスペースのみ `_` に置換し、それ以外は verbatim。置換は walker が一度だけ行うので、writer / unifier 側で再正規化しない。
+- `<ecosystem>` は walker が `IndexEntry.Source` に格納する正規化済み値 (例: `AlmaLinux`、`Go`、`PyPI`、`Rocky_Linux`、`Generic`)。upstream の OSV ディレクトリ名のうちスペースを `_` に置換し、`[EMPTY]` は fetcher 側で `Generic` にリネームする。それ以外は verbatim。下流 (writer / unifier) は再正規化しない。
 - KEV は単一 JSON ファイル (`known_exploited_vulnerabilities.json`)。fetcher は archive を扱わず GET → 保存のみ。
 - EPSS は単一 gzip CSV (`epss_scores-current.csv.gz`) を取得し、download 時に gzip 展開して plain CSV (`epss_scores-current.csv`) として保存する。Stage 4 annotator は `encoding/csv` だけで読める。
+- Exploit-DB は単一 CSV ファイル (`files_exploits.csv`)。1 行 = 1 exploit、`codes` カラムで複数 CVE-ID を保持する場合は Stage 4 annotator が CVE 単位に展開する。
 - 1 PrimaryID = 1 ファイル。毎回フル再構築 (§5.1)。
 
 ## 5. パイプライン
@@ -77,7 +79,8 @@ Stage 1: Walk     → map[PrimaryID][]IndexEntry            (索引のみ。中�
 Stage 2: Unify    → []UnifiedAdvisory                     (各 IndexEntry を full parse + semantic merge)
 Stage 3: Write    → <cache-dir>/unified/cve/<year>/<CVE-ID>.json
                     <cache-dir>/unified/standalone/<ecosystem>/<id>.json
-Stage 4: Annotate → 既存 unified JSON を読み、KEV / EPSS メタを `kev` / `epss` フィールドに追記して書き戻す
+Stage 4: Annotate → 既存 unified JSON を読み、KEV / EPSS / Exploit-DB シグナルを
+                    `kev` / `epss` / `exploits` フィールドに追記して書き戻す
 ```
 
 (*) PrimaryID 決定のために OSV の `id` と `aliases` だけは読む。SourceRecord 等の構築はせず、map を作るためだけの軽量読み込み。
@@ -90,16 +93,17 @@ unify 実行時は `<cache-dir>/unified` を最初に削除してから書き直
 
 理由: 当初 standalone advisory として保存された (例: `GHSA-xxxx`) ものに、後日 `aliases: ["CVE-2024-9999"]` が付くケースがある。差分更新方式や上書き方式だと過去の standalone レコードが消えず二重に残る。フル削除 → フル書き直しなら毎回最新 sources の状態だけを反映できる。
 
-### 5.2 Stage 4: Annotate (KEV / EPSS 後付け)
+### 5.2 Stage 4: Annotate (KEV / EPSS / Exploit-DB 後付け)
 
-Stage 1-3 が書き出した unified ファイル群に対し、外部シグナル (KEV, EPSS) を読み込んで CVE-ID に該当する unified ファイルを開き、対応するフィールドを更新して書き戻す。
+Stage 1-3 が書き出した unified ファイル群に対し、外部シグナル (KEV / EPSS / Exploit-DB) を読み込んで CVE-ID に該当する unified ファイルを開き、対応するフィールドを更新して書き戻す。
 
 - 入力ソース:
   - KEV: `<sourcesRoot>/kev/known_exploited_vulnerabilities.json` (JSON)
   - EPSS: `<sourcesRoot>/epss/epss_scores-current.csv` (download 時に gzip 展開済みの plain CSV)
-- 該当 PrimaryID の unified ファイルが存在しない場合は **skip + log で確定** (PR 9 はこの動作で実装)。KEV / EPSS カタログには CVE-ID が付くだけで他 source に観測されていない CVE もありうる前提。これを「シグナルだけの standalone unified」として作るかは将来の拡張として §14 に残す。
-- ファイル更新は temp file → rename で atomic。
-- Stage 4 は Stage 3 への依存があるため、`wisteria unify` は 1-3-4 を直列で回す。Stage 4 内では KEV → EPSS の順で annotate する (各シグナルは互いに独立、別フィールド)。
+  - Exploit-DB: `<sourcesRoot>/exploitdb/files_exploits.csv` (1 行 = 1 exploit、`codes` カラムに CVE-ID を 0 個以上)
+- 該当 PrimaryID の unified ファイルが存在しない CVE-ID は **silent skip**。各カタログには他 source に観測されていない CVE もありうる前提。これを「シグナルだけの standalone unified」として作るかは未決定 (§12 参照)。
+- ファイル更新は plain `os.WriteFile`。Stage 4 はフル再構築の後段で動くため、書き込み中断時は次回 `wisteria unify` が Stage 1-3 から再生成する。
+- Stage 4 は Stage 3 への依存があるため、`wisteria unify` は 1-3-4 を直列で回す。Stage 4 内の順序は KEV → EPSS → Exploit-DB (各シグナルは互いに独立、別フィールド)。
 - 後付けは Stage 1-3 のフル再構築の後段で行うので、毎回最新カタログを反映できる (差分更新の懸念なし)。
 
 ## 6. パッケージ構成
@@ -120,6 +124,8 @@ internal/
     └── pipeline/               # Stage 1-4 の直列オーケストレーション
 
 cmd/
+├── root.go                     # ルートコマンド + 共通 persistent flag
+├── fetch.go                    # `wisteria fetch <source>` (各 fetcher の薄いラッパ)
 ├── unify.go                    # production: pipeline.Run のシン Cobra ラッパ + pprof
 └── debug/                      # 観察用サブコマンド (1 サブコマンド = 1 ファイル)
     ├── debug.go                # `wisteria debug` の親コマンド
@@ -138,10 +144,11 @@ cmd/
 type SourceKind string
 
 const (
-    SourceOSV  SourceKind = "osv"
-    SourceCVE  SourceKind = "cve"
-    SourceKEV  SourceKind = "kev"
-    SourceEPSS SourceKind = "epss"
+    SourceOSV       SourceKind = "osv"
+    SourceCVE       SourceKind = "cve"
+    SourceKEV       SourceKind = "kev"
+    SourceEPSS      SourceKind = "epss"
+    SourceExploitDB SourceKind = "exploitdb"
 )
 
 // Provenance は merge 前の出所追跡情報。raw データ本体は <cache-dir>/sources/
@@ -218,17 +225,32 @@ type KEVRecord struct {
     CWEs                       []string   `json:"cwes,omitempty"`
 }
 
+// ExploitDBRecord は Exploit-DB files_exploits.csv の 1 行分を保持する exploit シグナル。
+// 1 CVE-ID が複数の EDB-ID (platform / researcher 違い) を持ちうるため Exploits は slice。
+// catalog の行順を保つ (Stage 4 が CSV 順に append)。
+type ExploitDBRecord struct {
+    From          Provenance `json:"from"`
+    ID            int        `json:"id"`               // EDB-ID
+    URL           string     `json:"url"`              // https://www.exploit-db.com/exploits/<id>
+    Title         string     `json:"title"`            // CSV "description"
+    DatePublished string     `json:"date_published"`   // YYYY-MM-DD
+    Type          string     `json:"type,omitempty"`
+    Platform      string     `json:"platform,omitempty"`
+    Verified      bool       `json:"verified"`
+}
+
 // UnifiedAdvisory は PrimaryID をキーに各 source をフィールド単位で merge した中間表現。
 type UnifiedAdvisory struct {
-    PrimaryID    string           `json:"primary_id"`
-    SourceIDs    []string         `json:"source_ids,omitempty"` // PrimaryID 以外の ID (dedup + 辞書順)
-    Descriptions []Description    `json:"descriptions"`         // 並列保持 (lang × source)
-    References   []Reference      `json:"references"`           // dedup + 辞書順
-    Severities   []Severity       `json:"severities"`           // dedup
-    Affected     []AffectedRecord `json:"affected"`             // 並列保持
-    KEV          *KEVRecord       `json:"kev,omitempty"`        // KEV カタログ入りの場合のみ非 nil
-    EPSS         *EPSSScore       `json:"epss,omitempty"`       // EPSS スコアがある場合のみ非 nil
-    Provenances  []Provenance     `json:"provenances"`          // 出所一覧
+    PrimaryID    string            `json:"primary_id"`
+    SourceIDs    []string          `json:"source_ids,omitempty"`  // PrimaryID 以外の ID (dedup + 辞書順)
+    Descriptions []Description     `json:"descriptions"`          // 並列保持 (lang × source)
+    References   []Reference       `json:"references"`            // dedup + 辞書順
+    Severities   []Severity        `json:"severities"`            // dedup
+    Affected     []AffectedRecord  `json:"affected"`              // 並列保持
+    KEV          *KEVRecord        `json:"kev,omitempty"`         // KEV カタログ入りの場合のみ非 nil
+    EPSS         *EPSSScore        `json:"epss,omitempty"`        // EPSS スコアがある場合のみ非 nil
+    Exploits     []ExploitDBRecord `json:"exploits,omitempty"`    // Exploit-DB エントリ (1 CVE = N EDB-ID)
+    Provenances  []Provenance      `json:"provenances"`           // 出所一覧
 }
 ```
 
@@ -243,14 +265,15 @@ OSV / CVE / KEV の struct は **upstream の全フィールドを typed field �
 - `cve.Container.XGenerator` / `XLegacyV4Record` / `XAffectedList` / `XRedhatCweChain` / `XConverterErrors`: upstream `x_*` 拡張で publisher 固有
 - `cve.MetricOther.Content`: SSVC など metric ごとに任意 schema
 
-EPSS は CSV 固定 3 列 (`cve, epss, percentile`) で構造が決まりきっているため typed のみ。
+EPSS は CSV 固定 3 列 (`cve, epss, percentile`)、Exploit-DB は CSV ヘッダ固定で構造が決まりきっているため typed のみ (schema-coverage 対象外)。
 
 直接 typed access するのは下記。これ以外のフィールドも全て typed として保持されているが、パイプラインが値を見るのは下記に限る:
 
 - OSV: `id`、`aliases`、`summary`、`details`、`affected[]`、`references[]`、`severity[]`
-- CVE5: `cveMetadata.cveId`、`containers.cna.descriptions[]`、`containers.cna.affected[]`、`containers.cna.references[]`、`containers.cna.metrics[]`
+- CVE5: `cveMetadata.cveId`、`containers.cna.descriptions[]`、`containers.cna.affected[]`、`containers.cna.references[]`、`containers.cna.metrics[]`、`containers.adp[]` の同フィールド
 - KEV: catalog top-level (`title`、`catalogVersion`、`dateReleased`、`count`)、`vulnerabilities[]` 各エントリの全フィールド
-- EPSS: header コメント行 (`#model_version:..,score_date:..`) はパース時に skip。CSV body の各データ行を `Score{CVE, EPSS, Percentile}` として保持
+- EPSS: header コメント行 (`#model_version:..,score_date:..`) はパース時に header struct に取り込む。CSV body の各データ行を `Score{CVE, EPSS, Percentile}` として保持
+- Exploit-DB: CSV header の `id` / `file` / `description` / `date_published` / `type` / `platform` / `verified` / `codes` (CVE-ID 列) を行単位に typed 化
 
 ## 8. マージルール
 
@@ -279,7 +302,7 @@ var sourcePriority = []string{
 
 ベンダー名は `<SourceKind>.<ecosystem>` 形式 (例: `osv.AlmaLinux`)。`<ecosystem>` は walker が `IndexEntry.Source` に格納する正規化済み値 (スペース → `_`) をそのまま使う (例: OSV ディレクトリ `Red Hat` → tag `osv.Red_Hat`)。CVE5 は `cve.mitre` で固定。配列に含まれない source は末尾扱い。
 
-**現時点ではこの配列はドラフト**。`wisteria debug fields` で実データを観察し、出現する全 ecosystem を網羅した順序を [#22](https://github.com/masahiro331/wisteria/issues/22) で確定する。
+**現時点ではこの配列はドラフト**。`wisteria debug unify --sample N` で実データを観察し、出現する全 ecosystem を網羅した順序を確定する (`docs/ROADMAP.md` Phase 1 to-decide「Vendor priority array final members」参照)。
 
 KEV / EPSS はベンダー / advisory ではなく exploit シグナルなので優先度配列には入れない。Description / Severity / Reference / Affected の merge には参加せず、UnifiedAdvisory の専用フィールド `KEV *KEVRecord` / `EPSS *EPSSScore` (§7) にだけ載せる。
 
@@ -312,14 +335,14 @@ KEV / EPSS はベンダー / advisory ではなく exploit シグナルなので
 - 並び順: 優先度配列順 → Provenance.ID → 入力順 (tie-breaker: 1 OSV ファイルが N packages を持つ典型ケースで出力を決定的にするため)
 - CVE5 は §8.3 と同じく CNA + 各 ADP を全て収集する。ADP は Provenance.ID 末尾に `#adp:<providerShortName>` を付与
 
-### 8.6 KEV / EPSS
+### 8.6 KEV / EPSS / Exploit-DB
 
-KEV / EPSS は merge ではなく Stage 4 (Annotate, §5.2) で個別ファイルに直接書き戻す。詳細は Stage 4 の I/F (§9 末尾) を参照。
+KEV / EPSS / Exploit-DB は merge ではなく Stage 4 (Annotate, §5.2) で個別ファイルに直接書き戻す。詳細は Stage 4 の I/F (§9 Stage 4) を参照。
 
-- KEV エントリは `cveID` で一意 (KEV カタログ内で重複しない前提)。EPSS は CSV `cve` カラムで一意 (重複なし前提)。
-- 既存 `UnifiedAdvisory.KEV` / `UnifiedAdvisory.EPSS` がある場合 (= Stage 4 を 2 回連続で走らせた場合) は最新カタログの値で完全置換。
-- カタログに該当 CVE-ID が無い既存 UnifiedAdvisory は対応フィールドを nil のまま (= 触らない)。
-- EPSS は全 CVE をほぼカバー (~30万件)、KEV は exploit 既知のみ (~1500 件) という規模の違いがある。Stage 4 内で両方を annotate する順番は KEV → EPSS。
+- 一意性: KEV エントリは `cveID` で一意。EPSS は CSV `cve` カラムで一意。Exploit-DB は 1 行 = 1 EDB-ID で一意 (`codes` カラムに書かれた各 CVE-ID 配下に展開する)。
+- 既存 `UnifiedAdvisory.KEV` / `EPSS` / `Exploits` がある場合は最新カタログの値で完全置換 (再 annotate は idempotent)。
+- カタログに該当 CVE-ID が無い既存 UnifiedAdvisory は対応フィールドを触らない。
+- 規模感: EPSS は全 CVE をほぼカバー (~30万件)、KEV は exploit 既知のみ (~1500 件)、Exploit-DB は PoC 公開分のみ。Stage 4 内の順序は KEV → EPSS → Exploit-DB。
 
 ### 8.7 マージ実装の方針
 
@@ -392,7 +415,7 @@ func RunAll(ctx context.Context, sourcesRoot, outDir string, w io.Writer, linePr
 ```
 
 - 各 annotator はそれぞれのカタログを読み、CVE-ID で `<outDir>/cve/<year>/<CVE-ID>.json` に lookup → 該当 unified ファイルがあれば `KEV` / `EPSS` / `Exploits` を上書きして書き戻す。
-- 該当 unified ファイルが存在しない CVE-ID は **silent skip**。シグナルだけの UnifiedAdvisory を新規生成するかは未決定 (§13 の open question 参照)。
+- 該当 unified ファイルが存在しない CVE-ID は **silent skip**。シグナルだけの UnifiedAdvisory を新規生成するかは未決定 (§12 / `docs/ROADMAP.md` の Phase 1 to-decide「Signal-only UnifiedAdvisory」参照)。
 - カタログ自体が存在しない (該当 fetch 未実行) → no-op + nil error (部分 pipeline を許容する)。
 - カタログ parse 失敗 → file 名付き error で abort。
 - EPSS apply は 4× NumCPU の errgroup で並列実行 (各行が異なる CVE-ID を keys するため衝突しない)。
@@ -431,12 +454,13 @@ wisteria debug index --id <PrimaryID>             # 特定 PrimaryID に紐づ�
 wisteria debug unify --id <PrimaryID>             # 1 PrimaryID をフル parse + merge → indented JSON
 wisteria debug unify --sample N                   # 辞書順先頭 N 件をマージ → NDJSON (§8 検証用)
 wisteria debug annotate                           # 既存 unified/ ツリーに対し Stage 4 のみ再実行
-wisteria debug ai summarize --id <PrimaryID>      # Phase 2 開発用: AI Summarizer を 1 件叩く
+wisteria debug ai summarize --id <CVE-ID>         # Phase 2 開発用: AI Summarizer を 1 件叩く (現状 CVE-ID のみ)
 wisteria debug ai summarize --from-stdin          # Phase 2 開発用: stdin の UnifiedAdvisory を要約
 ```
 
 - 親コマンド `cmd/debug/debug.go` から各サブコマンドを登録 (1 サブコマンド = 1 ファイル)。
-- `--id` と `--sample` は排他。`--id` は PrimaryID (CVE-ID または source 由来 ID 両方を受け付ける)。
+- `--id` と `--sample` は排他。`debug index` / `debug unify` の `--id` は PrimaryID (CVE-ID または source 由来 ID 両方を受け付ける)。`debug ai summarize --id` は現状 CVE-ID 限定で、standalone PrimaryID lookup は follow-up。
+- `debug ai summarize` は provider 選択用に `--provider` (default `ollama`)、`--model`、`--endpoint`、`--think` を持つ。
 - 重い集計を持つコマンドが今後増えた場合は `--limit` などで応答時間をコントロールする。
 
 ## 11. テスト戦略 (TDD)

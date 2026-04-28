@@ -5,10 +5,11 @@ package unifier
 // suffix, unlike OSV where the ecosystem is appended.
 const cveSourceTag = "cve.mitre"
 
-// sourcePriority is the draft cross-field vendor ordering from §8.1. The
-// final membership and order is decided in #22 once `wisteria debug
-// fields` has been run against real data; until then, sources missing
-// from this list fall through to defaultRank (sorted last).
+// sourcePriority is the draft cross-field vendor ordering from §8.1.
+// Final membership is pinned once enough real-data observations are in
+// (see docs/ROADMAP.md Phase 1 "Vendor priority array final members");
+// until then, sources missing from this list fall through to
+// defaultRank (sorted last).
 //
 // Tag format: "<SourceKind>.<ecosystem>". The ecosystem segment is the
 // already-normalized IndexEntry.Source value (walker replaces spaces

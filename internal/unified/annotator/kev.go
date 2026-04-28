@@ -1,12 +1,13 @@
 // Package annotator is Stage 4 of the unified-advisory pipeline. It
-// reads per-source signal catalogs (KEV, EPSS) and writes their fields
-// back into the matching <outDir>/cve/<year>/<CVE-ID>.json files
-// produced by Stage 3.
+// reads per-source signal catalogs (KEV, EPSS, Exploit-DB) and writes
+// their fields back into the matching <outDir>/cve/<year>/<CVE-ID>.json
+// files produced by Stage 3.
 //
 // Annotators run after writer.Write has finished, so the unified files
-// already exist on disk. A KEV / EPSS entry whose CVE-ID has no matching
-// unified file is silently skipped — signal-only handling (creating a
-// stub UnifiedAdvisory from KEV/EPSS alone) is deferred per design §Q3.
+// already exist on disk. A catalog entry whose CVE-ID has no matching
+// unified file is silently skipped — synthesizing a signal-only
+// UnifiedAdvisory is an open question (see docs/ROADMAP.md Phase 1
+// "Signal-only UnifiedAdvisory").
 //
 // A missing source catalog (e.g. user ran `wisteria unify` without
 // `wisteria fetch kev`) is a no-op rather than an error: not every

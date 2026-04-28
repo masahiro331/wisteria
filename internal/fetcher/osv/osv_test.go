@@ -217,14 +217,13 @@ func TestFetcher_Fetch_RespectsCacheDirOverride(t *testing.T) {
 }
 
 // TestFetcher_Fetch_RenamesEMPTYEcosystemToGeneric pins the rename
-// rule from the validation pass on issue #23: OSV upstream's
-// ecosystems.txt lists "[EMPTY]" verbatim as the bucket for
-// ecosystem-less generic advisories. The literal sentinel is ugly to
-// shell-glob (square brackets need escaping) and leaks into
+// rule for OSV upstream's "[EMPTY]" ecosystem (the bucket OSV uses for
+// ecosystem-less generic advisories). The literal sentinel is ugly to
+// shell-glob (brackets need escaping) and would leak into
 // Provenance.Path / IndexEntry.Source. The fetcher renames the local
-// directory to "Generic" while the upstream URL path keeps "[EMPTY]"
-// — the rename is purely a download-time concern, downstream stages
-// see "Generic" verbatim and need no special-case handling.
+// directory to "Generic" while the upstream URL path keeps "[EMPTY]";
+// the rename is purely a download-time concern, downstream stages see
+// "Generic" verbatim and need no special-case handling.
 func TestFetcher_Fetch_RenamesEMPTYEcosystemToGeneric(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ecosystems.txt", func(w http.ResponseWriter, _ *http.Request) {
