@@ -149,12 +149,13 @@ func (f *Fetcher) downloadEcosystem(ctx context.Context, root, ecosystem string)
 	}
 	defer resp.Body.Close()
 
-	dir := filepath.Join(root, ecosystem)
+	local := localEcosystem(ecosystem)
+	dir := filepath.Join(root, local)
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return err
 	}
 	dest := filepath.Join(dir, archiveName)
-	if err := fetcher.WriteResponse(dest, resp, f.progress.Bar(ecosystem, resp.ContentLength)); err != nil {
+	if err := fetcher.WriteResponse(dest, resp, f.progress.Bar(local, resp.ContentLength)); err != nil {
 		return err
 	}
 	if err := archive.Zip(dest, dir); err != nil {
@@ -164,6 +165,21 @@ func (f *Fetcher) downloadEcosystem(ctx context.Context, root, ecosystem string)
 		return fmt.Errorf("remove archive %s: %w", dest, err)
 	}
 	return nil
+}
+
+// localEcosystem maps an upstream ecosystem name (as listed in OSV's
+// ecosystems.txt) to the directory name used on disk. Upstream's
+// "[EMPTY]" sentinel — used for ecosystem-less generic advisories — is
+// renamed to "Generic" so the literal brackets don't leak into
+// Provenance.Path, IndexEntry.Source, or the standalone bucket name.
+// Other ecosystem names are passed through verbatim; case + spacing
+// stay as upstream emits them and walker handles space normalization
+// itself when building IndexEntry.Source.
+func localEcosystem(upstream string) string {
+	if upstream == "[EMPTY]" {
+		return "Generic"
+	}
+	return upstream
 }
 
 func (f *Fetcher) get(ctx context.Context, path string) (*http.Response, error) {

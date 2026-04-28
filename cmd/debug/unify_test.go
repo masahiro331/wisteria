@@ -181,7 +181,7 @@ func TestDebugUnify_RequiresID(t *testing.T) {
 	cacheDir := unifyFixtureCacheDir(t)
 	_, _, err := runDebugUnify(t, "--cache-dir", cacheDir)
 	if err == nil {
-		t.Fatal("expected error when --id is missing")
+		t.Fatal("expected error when neither --id nor --sample is given")
 	}
 }
 
@@ -191,4 +191,71 @@ func TestDebugUnify_IDNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unknown PrimaryID")
 	}
+}
+
+// sampleFixture lays out three OSV records with different PrimaryIDs so
+// --sample has something to pick from. Lex-sorted order is
+// CVE-2024-0001 → CVE-2024-0002 → GO-2024-9000, so --sample 2 must
+// emit the two CVE entries (deterministically) and skip the Go one.
+func sampleFixture(t *testing.T) string {
+	t.Helper()
+	cacheDir := t.TempDir()
+	src := filepath.Join(cacheDir, "sources")
+	writeFile(t, src, "osv/PyPI/PYSEC-1.json",
+		`{"id":"PYSEC-1","aliases":["CVE-2024-0001"],"summary":"py 1"}`)
+	writeFile(t, src, "osv/PyPI/PYSEC-2.json",
+		`{"id":"PYSEC-2","aliases":["CVE-2024-0002"],"summary":"py 2"}`)
+	writeFile(t, src, "osv/Go/GO-2024-9000.json",
+		`{"id":"GO-2024-9000","summary":"go 1"}`)
+	return cacheDir
+}
+
+// TestDebugUnify_SamplePicksFirstNLexicographically pins the
+// reproducibility contract: --sample N must always pick the same N
+// PrimaryIDs given the same sources tree (no random sampling). The
+// order also defines what the validator sees when running the command
+// repeatedly, so the contract is observable in the output.
+func TestDebugUnify_SamplePicksFirstNLexicographically(t *testing.T) {
+	cacheDir := sampleFixture(t)
+	stdout, _, err := runDebugUnify(t, "--cache-dir", cacheDir, "--sample", "2")
+	if err != nil {
+		t.Fatalf("debug unify --sample: %v", err)
+	}
+	// NDJSON: one minified UnifiedAdvisory per line.
+	lines := splitNDJSON(stdout)
+	if len(lines) != 2 {
+		t.Fatalf("got %d lines, want 2 (NDJSON):\n%s", len(lines), stdout)
+	}
+	wantIDs := []string{"CVE-2024-0001", "CVE-2024-0002"}
+	for i, want := range wantIDs {
+		var rec unified.UnifiedAdvisory
+		if err := json.Unmarshal([]byte(lines[i]), &rec); err != nil {
+			t.Fatalf("decode line %d: %v\n%s", i, err, lines[i])
+		}
+		if rec.PrimaryID != want {
+			t.Errorf("line %d PrimaryID = %q, want %q", i, rec.PrimaryID, want)
+		}
+	}
+}
+
+func TestDebugUnify_SampleAndIDAreMutuallyExclusive(t *testing.T) {
+	cacheDir := sampleFixture(t)
+	_, _, err := runDebugUnify(t, "--cache-dir", cacheDir, "--id", "CVE-2024-0001", "--sample", "2")
+	if err == nil {
+		t.Fatal("expected error when --id and --sample are both supplied")
+	}
+}
+
+// splitNDJSON peels off non-empty lines from buf so trailing newlines
+// don't show up as ghost records. Used because cobra's stdout writer
+// may flush an extra newline at end-of-command on some platforms.
+func splitNDJSON(buf string) []string {
+	var out []string
+	for _, ln := range bytes.Split([]byte(buf), []byte("\n")) {
+		if len(bytes.TrimSpace(ln)) == 0 {
+			continue
+		}
+		out = append(out, string(ln))
+	}
+	return out
 }
