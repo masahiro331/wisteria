@@ -74,7 +74,7 @@ Square brackets are filesystem-legal but they need escaping in shell globs (`uni
 
 **Fix in this PR**: the OSV fetcher renames `[EMPTY]` to `Generic` at download time (`internal/fetcher/osv/osv.go:localEcosystem`). The upstream URL path keeps `[EMPTY]/all.zip` because the OSV bucket lookup requires the literal sentinel; only the local on-disk directory is renamed. Downstream stages (walker / unifier / writer) see `Generic` verbatim and need no special-case handling.
 
-Operators with an existing `tmp/sources/osv/[EMPTY]/` directory should re-run `wisteria fetch osv` to switch to the renamed layout. The old directory can be deleted manually (this PR does not auto-migrate it — the fetcher only knows how to download, not how to reconcile pre-existing layout drift).
+Operators with an existing `tmp/sources/osv/[EMPTY]/` directory can either re-run `wisteria fetch osv` (the new layout will be downloaded into `Generic/`, and the old `[EMPTY]/` should be deleted manually to avoid double-walking the same advisories) or simply `mv` it: `mv tmp/sources/osv/[EMPTY] tmp/sources/osv/Generic`. The fetcher does not auto-migrate pre-existing layout drift.
 
 The §8.1 vendor priority array still does not list `osv.Generic` explicitly; it ranks last via `defaultRank`, which is consistent with treating it as a low-information generic source. Whether `osv.Generic` should be added to the array is part of the open question in #22 and intentionally not decided here.
 
