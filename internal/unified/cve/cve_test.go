@@ -552,4 +552,47 @@ func TestRoundTrip_ProblemDescriptionReferences(t *testing.T) {
 	if len(refs2) != 2 || refs2[0].URL != refs[0].URL || refs2[1].URL != refs[1].URL {
 		t.Errorf("round-trip lost references: got %#v", refs2)
 	}
+
+	// Stronger guard against the §7 contract: assert against the raw
+	// JSON shape of the re-marshaled record so a future rename of the
+	// `references` / `url` / `tags` / `name` JSON tags is caught even
+	// though both encode and decode legs would still round-trip cleanly
+	// through the Go struct itself.
+	assertRawProblemDescriptionReferences(t, roundTripped)
+}
+
+// assertRawProblemDescriptionReferences decodes the re-marshaled bytes
+// into a generic map and pins the expected key names and values at the
+// problemTypes[].descriptions[].references[] depth. Split out of the
+// test body so the round-trip flow stays readable and to keep the test
+// function below the project's cyclomatic-complexity gate.
+func assertRawProblemDescriptionReferences(t *testing.T, roundTripped []byte) {
+	t.Helper()
+	var rawTree map[string]any
+	if err := json.Unmarshal(roundTripped, &rawTree); err != nil {
+		t.Fatalf("raw re-unmarshal: %v", err)
+	}
+	gotRefs := rawTree["containers"].(map[string]any)["cna"].(map[string]any)["problemTypes"].([]any)[0].(map[string]any)["descriptions"].([]any)[0].(map[string]any)["references"]
+	gotRefList, ok := gotRefs.([]any)
+	if !ok {
+		t.Fatalf("re-marshaled JSON has no `references` key under problemTypes[].descriptions[]: %v", rawTree)
+	}
+	if len(gotRefList) != 2 {
+		t.Fatalf("references[] len = %d, want 2", len(gotRefList))
+	}
+	first := gotRefList[0].(map[string]any)
+	if first["url"] != "https://cwe.mitre.org/data/definitions/20.html" {
+		t.Errorf("first.url = %q", first["url"])
+	}
+	firstTags, _ := first["tags"].([]any)
+	if len(firstTags) != 1 || firstTags[0] != "technical-description" {
+		t.Errorf("first.tags = %#v", first["tags"])
+	}
+	second := gotRefList[1].(map[string]any)
+	if second["url"] != "https://example.com/research" {
+		t.Errorf("second.url = %q", second["url"])
+	}
+	if second["name"] != "Research note" {
+		t.Errorf("second.name = %q", second["name"])
+	}
 }
