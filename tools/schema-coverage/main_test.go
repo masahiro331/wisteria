@@ -8,15 +8,9 @@ import (
 
 // TestCollectMissing_DetectsNestedReferences pins the §7 "1 byte not
 // lost" rule from the tool side: a non-empty raw value at any depth
-// that the typed schema lacks must show up in the diff. This is the
-// regression check for issue #56 — the bug there was that
-// problemTypes[].descriptions[].references was silently dropped, and
-// the natural question is "would schema-coverage have caught it?".
-//
-// The answer is yes provided a sampled file actually contained a
-// non-empty references[] at that depth; this test shows the detection
-// path itself is intact regardless of which files happen to be
-// sampled.
+// that the typed schema lacks must show up in the diff. The test
+// guards the detection path itself, independent of which files happen
+// to be sampled when the tool runs against a real sources tree.
 func TestCollectMissing_DetectsNestedReferences(t *testing.T) {
 	rawJSON := []byte(`{
 		"containers": {
@@ -71,12 +65,10 @@ func TestCollectMissing_DetectsNestedReferences(t *testing.T) {
 	}
 }
 
-// TestCollectMissing_EmptyArrayIsAbsentEquivalent guards the existing
+// TestCollectMissing_EmptyArrayIsAbsentEquivalent guards the
 // noise-suppression rule: an empty references[] in raw with no field
-// in typed must NOT be reported. Issue #56's empirical impact note
-// hinges on this — the tool didn't trip on real data because the
-// sampled records happened to have no entries at that depth, not
-// because the detection logic was broken.
+// in typed must NOT be reported (an empty array carries no information
+// beyond its bare presence).
 func TestCollectMissing_EmptyArrayIsAbsentEquivalent(t *testing.T) {
 	rawJSON := []byte(`{
 		"problemTypes": [

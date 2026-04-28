@@ -54,9 +54,10 @@ func TestMergeDescriptions(t *testing.T) {
 			},
 		},
 		{
-			// OSV Summary + Details both kept as separate descriptions
-			// (decision in #17): same source, same lang, distinct text
-			// must remain. Tie-break by input index keeps Summary first.
+			// OSV Summary + Details are kept as separate descriptions
+			// (§8.3 parallel-hold rule): same source, same lang, distinct
+			// text must remain. Tie-break by input index keeps Summary
+			// first.
 			name: "same source same lang preserves both entries in input order",
 			in: []unified.Description{
 				{Lang: "en", Text: "Summary line", From: provAlma},
