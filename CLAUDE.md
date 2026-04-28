@@ -4,15 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Wisteria is a free, fast vulnerability database builder. It is a Go CLI that aggregates data from public sources (OSV, MITRE CVEListV5, CISA KEV, FIRST EPSS) and — across later phases — enriches it with AI-generated summaries and stores everything in PostgreSQL.
+Wisteria is a free, fast vulnerability database builder. It is a Go CLI that aggregates data from public sources (OSV, MITRE CVEListV5, CISA KEV, FIRST EPSS, Exploit-DB) and — across later phases — enriches it with AI-generated summaries and stores everything in PostgreSQL.
 
-See `docs/meetings/2026-04-25-project-design.md` for the full requirements list and phase plan.
+See `docs/SYSTEM_OVERVIEW.md` for the current product shape and `docs/ROADMAP.md` for the per-phase task list.
 
 ## Phases
 
-- Phase 1 (current): download upstream sources to local files under `~/.cache/wisteria/`
-- Phase 2: AI processing (Claude API + local LLM) for summaries, labeling, exploit analysis
-- Phase 3: PostgreSQL storage and product identifier design
+- Phase 1 (current): source ingestion + unified-advisory pipeline (download → walker → merge → annotate). Output lives at `<cache-dir>/unified/`.
+- Phase 2: AI processing (Claude API + local LLM via Ollama) for summaries, labeling, exploit analysis. Local LLM scaffolding under `internal/ai/ollama` and `cmd/debug/ai.go`; production wiring not started.
+- Phase 3: PostgreSQL storage and product identifier design.
 
 ## Common commands
 

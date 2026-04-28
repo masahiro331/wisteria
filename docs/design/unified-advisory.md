@@ -102,47 +102,31 @@ Stage 1-3 が書き出した unified ファイル群に対し、外部シグナ�
 - Stage 4 は Stage 3 への依存があるため、`wisteria unify` は 1-3-4 を直列で回す。Stage 4 内では KEV → EPSS の順で annotate する (各シグナルは互いに独立、別フィールド)。
 - 後付けは Stage 1-3 のフル再構築の後段で行うので、毎回最新カタログを反映できる (差分更新の懸念なし)。
 
-## 6. パッケージ構成 (新規分)
+## 6. パッケージ構成
 
 ```
 internal/
 └── unified/
     ├── unified.go              # UnifiedAdvisory, Provenance, IndexEntry などの中核型
-    ├── osv/
-    │   ├── osv.go              # OSV schema (必要フィールドのみ)
-    │   └── osv_test.go
-    ├── cve/
-    │   ├── cve.go              # CVE5 schema (必要フィールドのみ)
-    │   └── cve_test.go
-    ├── kev/
-    │   ├── kev.go              # KEV schema (catalog + entry)
-    │   └── kev_test.go
-    ├── epss/
-    │   ├── epss.go             # EPSS CSV row schema
-    │   └── epss_test.go
-    ├── walker/
-    │   ├── walker.go           # Stage 1
-    │   └── walker_test.go
-    ├── unifier/
-    │   ├── unifier.go          # Stage 2
-    │   └── unifier_test.go
-    ├── writer/
-    │   ├── writer.go           # Stage 3
-    │   └── writer_test.go
-    ├── annotator/
-    │   ├── annotator.go        # Stage 4 (KEV を既存 unified ファイルに追記)
-    │   └── annotator_test.go
-    └── inspect/
-        ├── inspect.go          # 観察ヘルパ (フィールド分布集計、サンプル抽出など)
-        └── inspect_test.go
+    ├── osv/                    # OSV schema (必要フィールドのみ)
+    ├── cve/                    # CVE5 schema (必要フィールドのみ)
+    ├── kev/                    # KEV schema (catalog + entry)
+    ├── epss/                   # EPSS CSV row schema
+    ├── exploitdb/              # Exploit-DB CSV row schema (Stage 4 入力)
+    ├── walker/                 # Stage 1
+    ├── unifier/                # Stage 2 (per-PrimaryID merge + sort helper)
+    ├── writer/                 # Stage 3 (atomic write + standalone bucket routing)
+    ├── annotator/              # Stage 4 (KEV / EPSS / ExploitDB の後付け)
+    └── pipeline/               # Stage 1-4 の直列オーケストレーション
 
 cmd/
-├── unify.go                    # production: Stage 1-4 を直列実行
+├── unify.go                    # production: pipeline.Run のシン Cobra ラッパ + pprof
 └── debug/                      # 観察用サブコマンド (1 サブコマンド = 1 ファイル)
     ├── debug.go                # `wisteria debug` の親コマンド
     ├── index.go                # `wisteria debug index`
-    ├── unify.go                # `wisteria debug unify`
-    └── fields.go               # `wisteria debug fields`
+    ├── unify.go                # `wisteria debug unify [--id | --sample N]`
+    ├── annotate.go             # `wisteria debug annotate` (Stage 4 のみ再実行)
+    └── ai.go                   # `wisteria debug ai summarize` (Phase 2 開発用)
 ```
 
 ## 7. 主要な型
@@ -347,220 +331,127 @@ KEV / EPSS は merge ではなく Stage 4 (Annotate, §5.2) で個別ファイ�
 ### Stage 1: Walker
 
 ```go
-// internal/unified/walker/walker.go
-package walker
-
-// Index は sources root 配下を走査し、PrimaryID から該当 IndexEntry 群への索引を返す。
-// 1 OSV ファイルが aliases に N 個の CVE-ID を持つ場合、同じ IndexEntry が
-// N 個の PrimaryID 配下に重複登録される (§3.1)。
-func Index(ctx context.Context, sourcesRoot string) (map[string][]unified.IndexEntry, error)
+// internal/unified/walker
+func Index(ctx context.Context, sourcesRoot string, opts ...Option) (map[string][]unified.IndexEntry, error)
+func WithConcurrency(n int) Option
 ```
 
-- `<sourcesRoot>/osv/<ecosystem>/*.json`: `id` と `aliases` だけ軽量 unmarshal で取り出す
-  - aliases に CVE-ID が N 個あれば、各 CVE-ID 配下に同じ IndexEntry を N 個登録 (§3.1)
-  - aliases に CVE-ID が無い (または aliases フィールド自体が無い) record は `id` を PrimaryID にして 1 個登録 (standalone)
-- `<sourcesRoot>/cve/cvelistV5-main/cves/**/CVE-*.json`: ファイル名から CVE-ID を抽出 (中身を読まない)
-- KEV (`<sourcesRoot>/kev/`) は walker の対象外。Stage 4 で別途読み込む (§5.2)
-- SourceKind / Source は `<sourcesRoot>/<kind>/<ecosystem>/...` のディレクトリ階層から決定的に取る
-- ctx キャンセルを尊重する
+- `<sourcesRoot>/osv/<ecosystem>/*.json` を軽量 unmarshal (`id` + `aliases` のみ) して PrimaryID を決定 (§3.1)。OSV パーサ並列度は `WithConcurrency` で制御。
+- `<sourcesRoot>/cve/cvelistV5-main/cves/**/CVE-*.json` はファイル名のみ参照 (中身を読まない)。
+- KEV / EPSS / ExploitDB は対象外 (Stage 4 で別途読み込む)。
+- `IndexEntry.Source` はディスク上の OSV ecosystem ディレクトリ名のうち、空白を `_` に置換したもの (例: `Red Hat` → `Red_Hat`)。fetcher 側で `[EMPTY]` → `Generic` rename も行うため、walker から下流は `Generic` を verbatim に扱う。
+- ctx キャンセル尊重。1 ファイルでも parse 失敗があれば全体 abort。
 
 ### Stage 2: Unifier
 
-production と debug で 2 つの関数を分ける。
-
 ```go
-// internal/unified/unifier/unifier.go
-package unifier
-
-// Unify は索引の各 IndexEntry を full parse し、PrimaryID 単位で semantic merge する。
-// production 経路。parse 失敗が 1 件でもあれば error を返して全体を止める。
-func Unify(ctx context.Context, index map[string][]unified.IndexEntry) ([]unified.UnifiedAdvisory, error)
-
-// UnifyBestEffort は parse 失敗を logger に流して当該ファイルだけ skip し、
-// 残りの merge を続行する。debug 経路から呼ばれる。
-// log 形式は path と error を含む 1 行。
-func UnifyBestEffort(ctx context.Context, index map[string][]unified.IndexEntry, logger *slog.Logger) ([]unified.UnifiedAdvisory, error)
+// internal/unified/unifier
+func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []unified.IndexEntry) (unified.UnifiedAdvisory, error)
+func PriorityRank(source string) int
+func SourceTag(kind unified.SourceKind, source string) string
 ```
 
-- IndexEntry.Kind / Source / Path は Stage 1 で確定済み。Stage 2 では再判定しない
-- Provenance.Path には IndexEntry.Path をそのまま入れる
-- PrimaryID 単位でフィールド別 merge (`mergeReferences`, `mergeSeverities`, ...) を順に適用
-- SourceIDs は各 source の `id` および `aliases` のうち PrimaryID 以外をすべて集めて dedup + 辞書順
-- production の error メッセージにも path を含める
+- Stage 全体のオーケストレーション (PrimaryID fan-out, error policy, writer hand-off) は `internal/unified/pipeline` 側にある。`unifier` 自体は **1 PrimaryID = 1 関数呼び出し** の純粋な merge ユニット。
+- IndexEntry.Kind / Source / Path は Stage 1 確定値、Stage 2 では再判定しない。
+- 内部 helper:
+  - `mergeReferences` (§8.2)
+  - `mergeDescriptions` (§8.3)
+  - `mergeSeverities` (§8.4)
+  - `mergeAffected` (§8.5)
+  - 上記 §8.3 / §8.4 / §8.5 のソートは `stableSortByPriority` ジェネリックヘルパに集約 (priority → caller 指定 secondary key → 入力 index の決定論的並び替え)。
+- SourceIDs は各 source の `id` および `aliases` のうち PrimaryID 以外をすべて集めて dedup + 辞書順。
+- CVE5 ADP container は CNA と並列の Provenance を作り、ID 末尾に `#adp:<providerShortName>` を付与する。
 
 ### Stage 3: Writer
 
 ```go
-// internal/unified/writer/writer.go
-package writer
-
-// Write は records を §4 の出力レイアウトに従って書き出す。
-//   - PrimaryID が CVE-ID  → cacheDir/unified/cve/<year>/<CVE-ID>.json
-//   - それ以外             → cacheDir/unified/standalone/<ecosystem>/<id>.json
-// 書き出し前に cacheDir/unified を rm -rf 相当で削除する (§5.1)。
-func Write(ctx context.Context, cacheDir string, records []unified.UnifiedAdvisory) error
+// internal/unified/writer
+func OutDir(cacheDir string) (string, error)               // path resolve only, no I/O
+func Init(cacheDir string) (string, error)                 // OutDir + dest validation + cache reset
+func Reset(cacheDir string) (string, error)                // Init + RemoveAll + MkdirAll
+func CVEPath(outDir, cveID string) (string, bool)          // <outDir>/cve/<year>/<CVE-ID>.json
+func Write(outDir string, rec unified.UnifiedAdvisory) error
 ```
 
-**削除 guard:**
-
-`outDir = filepath.Join(filepath.Clean(filepath.Abs(cacheDir)), "unified")` を内部で組み立て、削除前に以下を assert。いずれか満たさなければ error 返却。
-
-- `cacheDir` が空文字でないこと
-- `cacheDir` が相対 path の場合は `filepath.Abs` で絶対化してから guard を通す (CLI から相対指定する運用を許容するため)
-- `outDir` の basename が `"unified"` であること
-- 絶対化後の `outDir` が `/` ではないこと
-- 既存の `outDir` の扱い:
-  - 存在しない: OK (初回実行)
-  - ディレクトリとして存在: OK (削除して再生成)
-  - シンボリックリンクまたは通常ファイルとして存在: error
-
-**書き出し:**
-
-- PrimaryID の形式判定:
-  - `CVE-YYYY-NNNN` 正規表現にマッチ → cve バケット、`<year>` は YYYY を抽出
-  - それ以外 → standalone バケット、`<ecosystem>` は最優先 Provenance の Source をそのまま使う (walker 側で正規化済みなので writer での再置換は不要)
-- 出力ディレクトリは事前に `MkdirAll`
-- temp file → rename でファイル単位 atomic write
-- ファイル名は PrimaryID をそのまま使う。FS で危険な文字 (`/`, `:`) は `_` に置換 (例: `ALBA-2019:0973` → `ALBA-2019_0973.json`)
+- **削除 guard** (`Init` 内): `cacheDir` 非空、絶対化後 `/` でない、`outDir` の basename が `"unified"`、既存 outDir はディレクトリのみ許容 (symlink / 通常ファイルは error)。
+- **大量書き込み最適化**: bucket dirs (`unified/cve/<year>/`、`unified/standalone/<ecosystem>/`) は package-level `sync.Map` で MkdirAll 結果をキャッシュ。同一 bucket への 100k+ 書き込みでも syscall 1 回。
+- **ルーティング**:
+  - PrimaryID が `CVE-YYYY-NNNN` → `unified/cve/<year>/<CVE-ID>.json`
+  - それ以外 → `unified/standalone/<ecosystem>/<id>.json` (`<ecosystem>` は record 内 OSV provenance のうち `unifier.PriorityRank` が最も小さいもの)。
+- ファイル名: PrimaryID の `:` / `/` を `_` に置換 (例: `ALBA-2019:0973` → `ALBA-2019_0973.json`)。
+- 1 ファイル単位で temp file → rename の atomic write。
 
 ### Stage 4: Annotator
 
 ```go
-// internal/unified/annotator/annotator.go
-package annotator
-
-// AnnotateKEV は cacheDir/sources/kev/known_exploited_vulnerabilities.json を読み、
-// 各 KEV エントリの cveID に対応する cacheDir/unified/cve/<year>/<CVE-ID>.json を
-// 開いて UnifiedAdvisory.KEV を上書きし、temp file → rename で書き戻す。
-// 該当 unified ファイルが存在しなければ skip + log。
-func AnnotateKEV(ctx context.Context, cacheDir string, logger *slog.Logger) error
-
-// AnnotateEPSS は cacheDir/sources/epss/epss_scores-current.csv を読み、
-// 各行 (cve,epss,percentile) に対応する unified ファイルを開いて
-// UnifiedAdvisory.EPSS を上書きし、temp file → rename で書き戻す。
-// 該当 unified ファイルが存在しなければ skip + log。
-func AnnotateEPSS(ctx context.Context, cacheDir string, logger *slog.Logger) error
+// internal/unified/annotator
+func AnnotateKEV(ctx context.Context, sourcesRoot, outDir string) error
+func AnnotateEPSS(ctx context.Context, sourcesRoot, outDir string) error
+func AnnotateExploitDB(ctx context.Context, sourcesRoot, outDir string) error
+func RunAll(ctx context.Context, sourcesRoot, outDir string, w io.Writer, linePrefix string) error
 ```
 
-- 各カタログが存在しない場合 (該当 fetch 未実行) は no-op + warn。error は返さない
-- ファイル更新は temp file → rename で atomic
-- カタログのエントリが指す CVE-ID に対応する unified ファイルが存在しない場合: **初期実装は skip + log で確定**。シグナルだけの UnifiedAdvisory を新規生成するかどうかは将来の拡張として §14 に残す。PR 9 / PR 10 はこの skip + log コントラクトを満たすように実装する
-- `wisteria unify` は Stage 1-3 の後に Stage 4 (KEV → EPSS の順) を直列で呼ぶ。Stage 4 単体は `wisteria debug annotate` でも叩ける (PR 9 で追加)
+- 各 annotator はそれぞれのカタログを読み、CVE-ID で `<outDir>/cve/<year>/<CVE-ID>.json` に lookup → 該当 unified ファイルがあれば `KEV` / `EPSS` / `Exploits` を上書きして書き戻す。
+- 該当 unified ファイルが存在しない CVE-ID は **silent skip**。シグナルだけの UnifiedAdvisory を新規生成するかは未決定 (§13 の open question 参照)。
+- カタログ自体が存在しない (該当 fetch 未実行) → no-op + nil error (部分 pipeline を許容する)。
+- カタログ parse 失敗 → file 名付き error で abort。
+- EPSS apply は 4× NumCPU の errgroup で並列実行 (各行が異なる CVE-ID を keys するため衝突しない)。
+- `RunAll` は KEV → EPSS → ExploitDB を順次実行し、各 stage の経過時間を `w` に書く。`linePrefix` で出力プレフィックスを変えられる (`pipeline.Run` は `"stage 4 "` を渡し、`wisteria debug annotate` は `""` を渡す)。最初の error で中断。
 
-### Inspect (観察ヘルパ)
+### Stage 1-4 のオーケストレーション: pipeline
 
-`internal/unified/inspect/inspect.go` に置く。debug コマンドから呼ばれる前提で、production パイプラインからは呼ばない。提供する API:
+```go
+// internal/unified/pipeline
+type Options struct{ Concurrency int } // 0 → 4× NumCPU
+func Run(ctx context.Context, cacheDir string, opts Options, w io.Writer) error
+```
 
-- `FieldStats`: フィールドごとの出現数や値の分布を集計
-- `Sample`: ID リストまたはランダム抽出で UnifiedAdvisory を取り出す
-
-詳細シグネチャは PR 7 の実装時に確定する。
+- `Run` は walker.Index → writer.Reset → errgroup-bounded `unifier.MergePrimary → writer.Write` fan-out → `annotator.RunAll` の順に実行。
+- メモリ常駐は `Concurrency` 件分の advisory のみ (record 単位 streaming)。
+- `wisteria unify` は本パッケージのシン Cobra ラッパ。flag parsing と pprof のみ owned で、ステージング詳細はすべて pipeline 側。
 
 ## 10. CLI
 
 ### Production コマンド
 
 ```
-wisteria unify --cache-dir <path>
+wisteria unify --cache-dir <path> [--concurrency N] [--cpuprofile <file>]
 ```
 
-- 受け取るのは `--cache-dir` だけ。出力先は `<cache-dir>/unified` 固定。
-- 入力ルートは `<cache-dir>/sources` を内部で組み立てる
-- `--cache-dir` のデフォルト解決ルールは既存の `fetch` と共通
-- parse 失敗時は fail-fast (`unifier.Unify` を呼ぶ)。skip + log の挙動は `wisteria debug unify` を使う
-- Stage 1-3 完了後に Stage 4 (`annotator.AnnotateKEV` → `annotator.AnnotateEPSS`) を順に呼ぶ。各カタログ未取得なら warn + skip
+- `--cache-dir` の解決ルールは `wisteria fetch` と共通 (override → env → user cache dir)。出力先は `<cache-dir>/unified` 固定。
+- `--concurrency`: walker と Stage 2+3 fan-out 共通の上限。0 = 4× NumCPU。
+- parse 失敗 1 件で全体 abort (fail-fast)。skip 動作の代替は `wisteria debug unify` 側に持たせる方針。
+- Stage 1-3 完了後に Stage 4 (`annotator.RunAll`) を直列で呼ぶ。順序は KEV → EPSS → ExploitDB。各カタログ未取得なら no-op + nil error。
 
 ### Debug コマンド (production binary に同梱)
 
 ```
-wisteria debug index                              # walker.Index を回して map のサイズ/分布を出す
-wisteria debug index --id CVE-2024-0001           # 特定 PrimaryID に紐づく path を出す
-wisteria debug index --id ALBA-2019:0973          # standalone advisory も同じ --id で叩ける
-wisteria debug unify --id CVE-2024-0001           # 特定 PrimaryID をフル parse + merge して stdout に出す
-wisteria debug unify --sample 10                  # ランダム 10 件の merge 結果を stdout に出す
-wisteria debug fields                             # 全 OSV/CVE のフィールド出現数を集計
-wisteria debug fields --kind osv --field aliases  # 特定フィールドの値分布
+wisteria debug index                              # walker.Index の map サイズ/分布を出す
+wisteria debug index --id <PrimaryID>             # 特定 PrimaryID に紐づく path を列挙
+wisteria debug unify --id <PrimaryID>             # 1 PrimaryID をフル parse + merge → indented JSON
+wisteria debug unify --sample N                   # 辞書順先頭 N 件をマージ → NDJSON (§8 検証用)
+wisteria debug annotate                           # 既存 unified/ ツリーに対し Stage 4 のみ再実行
+wisteria debug ai summarize --id <PrimaryID>      # Phase 2 開発用: AI Summarizer を 1 件叩く
+wisteria debug ai summarize --from-stdin          # Phase 2 開発用: stdin の UnifiedAdvisory を要約
 ```
 
-- 親コマンド `cmd/debug/debug.go` から各サブコマンドを登録 (1 サブコマンド = 1 ファイル)
-- 重い集計は `--limit` 等を持たせる
-- `--id` は PrimaryID (CVE-ID または source 由来 ID 両方を受け付ける)
+- 親コマンド `cmd/debug/debug.go` から各サブコマンドを登録 (1 サブコマンド = 1 ファイル)。
+- `--id` と `--sample` は排他。`--id` は PrimaryID (CVE-ID または source 由来 ID 両方を受け付ける)。
+- 重い集計を持つコマンドが今後増えた場合は `--limit` などで応答時間をコントロールする。
 
 ## 11. テスト戦略 (TDD)
 
-各 stage と各 merge function に testdata fixture を置き、外部 I/O なしで完結させる。
+各 stage と各 merge function は `t.TempDir()` 上の合成 fixture で外部 I/O なしに pin する。pure function (mergeReferences / mergeSeverities / mergeDescriptions / mergeAffected / stableSortByPriority) は table-driven test で別個に網羅。
 
-```
-internal/unified/testdata/
-└── sources/
-    ├── osv/
-    │   ├── PyPI/PYSEC-2021-872.json   # aliases: [CVE-2021-42343, ...] 複数CVE
-    │   ├── npm/GHSA-xxxx.json         # aliases: [CVE-2024-0002]
-    │   └── AlmaLinux/ALBA-2019.json   # aliases なし → standalone
-    └── cve/cvelistV5-main/cves/2024/0xxx/
-        ├── CVE-2024-0001.json
-        └── CVE-2024-0002.json
-```
+主要 contract:
 
-検証ケース (table-driven):
+- **walker**: PrimaryID 決定の §3.1 全パターン、`IndexEntry.Source` の空白正規化、parse 失敗時の fail-fast。
+- **unifier**: OSV+CVE 両方 / 片方のみ / standalone / OSV alias 複数 CVE-ID / CVE5 ADP container ありのケースを `MergePrimary` に通して JSON 出力を pin。
+- **writer**: cve バケット / standalone バケットの path 生成、削除 → 再生成、削除 guard (空文字 / `/` / 非ディレクトリ existing outDir)、ファイル名エスケープ。
+- **annotator**: 各 annotator の happy path / 空カタログ / parse 失敗 / RunAll の順序 + linePrefix。
+- **pipeline**: Stage 1-4 を end-to-end で叩いて両バケットへの書き込みと Stage 4 反映を確認。
+- **debug commands**: 各サブコマンドのスモーク (`--id` / `--sample` / 排他 / 未存在 ID で非 0 exit)。
 
-- **walker**:
-  - 期待 IndexEntry map が返ること
-  - CVE-ID なし OSV (ALBA-*) が standalone として PrimaryID = 自身の id で索引に残ること
-  - 1 OSV の aliases に複数 CVE-ID がある場合は各 CVE-ID 配下に同じ IndexEntry が登録されること (§3.1)
-  - IndexEntry の Kind / Source / Path / SourceID が正しく埋まること
-- **PrimaryID 決定 (§3.1)**: CVE-ID あり / 無し / 複数 CVE-ID alias / 単一 CVE-ID alias の各ケースを網羅
-- **mergeReferences**: 同 URL 別表記の dedup、tags の和集合、辞書順
-- **mergeSeverities**: `(Type, Vector)` dedup、Vector 無し時の `(Type, Score)` フォールバック、評価が違う severity が並列保持されること
-- **Descriptions / Affected の並列保持**: 入力数 = 出力数、優先度順に並ぶこと
-- **SourceIDs**: PrimaryID が含まれないこと、dedup + 辞書順、aliases の他の CVE-ID も入ること
-- **unifier**:
-  - OSV + CVE 両方ある CVE-ID
-  - 片側だけ
-  - standalone advisory
-  - 1 OSV ファイルが複数 UnifiedAdvisory に出現するケース (alias 複数 CVE)
-  - parse 失敗時の挙動: `Unify` (production) は error 返却、`UnifyBestEffort` (debug) は skip + log
-- **writer**:
-  - cve バケット / standalone バケットそれぞれの path 生成
-  - 削除 → 再生成: 事前に `<cache-dir>/unified/` に古いファイルがあっても次回 unify で消えること
-  - 初回実行 (`unified/` 不在) で error にならないこと
-  - 削除 guard: `cacheDir` が空文字 / 相対 path / `/` のとき error、`unified/` がシンボリックリンク or 通常ファイルのとき error
-  - ファイル名エスケープ (`:` 等)
-- **debug コマンド**: 主要サブコマンドのスモークテスト (`--id` 指定で例外なく動くか)
+## 12. 未決定事項
 
-## 12. データ実態 (参考)
-
-`./tmp/` 配下を走査して確認した実態:
-
-- OSV ecosystem 数: 47 (`AlmaLinux`、`Alpine`、`PyPI`、`npm` ほか)
-- 1 ecosystem 配下のファイル数は数百〜数万のオーダー
-- OSV ファイル例 `PyPI/PYSEC-2021-872.json` の aliases: `["CVE-2021-42343", "GHSA-hwqr-f3v9-hwxr", "GHSA-j8fq-86c5-5v2r", "PYSEC-2021-387", "PYSEC-2021-871"]`
-- AlmaLinux など distro 系 OSV は aliases フィールド自体を持たないものが多い (例: ALBA-2019:0973)
-- CVE5 ファイル: `cveMetadata.cveId` に CVE-ID、`containers.cna.descriptions[]` に説明、`containers.cna.affected[]` に影響範囲
-
-## 13. 実装タスク
-
-実装は GitHub Issues で管理する。本セクションは作業分割表 (本ファイルではない) として Milestone [Unified Advisory pipeline](https://github.com/masahiro331/wisteria/milestone/1) を参照する。Issue 一覧:
-
-- [#13 unified: define OSV / CVE5 / KEV / EPSS schema types](https://github.com/masahiro331/wisteria/issues/13)
-- [#14 unified/walker: implement Stage 1 walker + PrimaryID resolution](https://github.com/masahiro331/wisteria/issues/14)
-- [#15 cmd/debug: skeleton command + 'debug index' subcommand](https://github.com/masahiro331/wisteria/issues/15)
-- [#16 unified/unifier: core merge (References + Severities) + 'debug unify'](https://github.com/masahiro331/wisteria/issues/16)
-- [#17 unified/unifier: parallel-hold merge (Descriptions + Affected)](https://github.com/masahiro331/wisteria/issues/17)
-- [#18 unified/inspect + 'debug fields'](https://github.com/masahiro331/wisteria/issues/18)
-- [#19 unified/writer + cmd/unify (Stage 1-3 production wiring)](https://github.com/masahiro331/wisteria/issues/19)
-- [#20 unified/annotator: AnnotateKEV (Stage 4 KEV)](https://github.com/masahiro331/wisteria/issues/20)
-- [#21 unified/annotator: AnnotateEPSS (Stage 4 EPSS)](https://github.com/masahiro331/wisteria/issues/21)
-
-各 Issue は branch-per-feature で 1 PR にする。PR description には `Closes #N` を入れる。
-
-## 14. 未決定事項
-
-設計判断のうち実データを見てから決める項目は GitHub Issues (label `kind/open-question`) で管理する:
-
-- [#22 Decide vendor priority array final members (§8.1)](https://github.com/masahiro331/wisteria/issues/22)
-- [#23 Validate merge rules against real data (§8)](https://github.com/masahiro331/wisteria/issues/23)
-- [#24 Decide whether to generate signal-only UnifiedAdvisory for KEV/EPSS-only CVE-IDs](https://github.com/masahiro331/wisteria/issues/24)
-- [#25 Decide whether to add concurrency to Stage 1-3](https://github.com/masahiro331/wisteria/issues/25)
-
-決定が出た時点で対応する設計書セクションを本ファイルに反映し、Issue を閉じる。
+設計判断のうち実データを見てから決める項目は GitHub Issues (label `kind/open-question`) で管理する。決定が出た時点で本設計書に反映し、Issue を閉じる。
