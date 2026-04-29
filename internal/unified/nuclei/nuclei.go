@@ -129,6 +129,11 @@ func Walk(ctx context.Context, root string) ([]Template, error) {
 		if d.IsDir() {
 			return nil
 		}
+		// Skip symlinks, sockets, fifos. Mirrors the OSV walker's
+		// non-regular-file guard at internal/unified/walker/walker.go.
+		if !d.Type().IsRegular() {
+			return nil
+		}
 		if !isYAML(d.Name()) {
 			return nil
 		}

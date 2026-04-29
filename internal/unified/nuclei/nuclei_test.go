@@ -158,6 +158,35 @@ func TestWalk_RootMissing_NoOp(t *testing.T) {
 	}
 }
 
+func TestWalk_SkipsNonRegularEntries(t *testing.T) {
+	root := t.TempDir()
+	// One real template that should be picked up.
+	mustWrite(t, filepath.Join(root, "real.yaml"),
+		`id: CVE-2024-1
+info:
+  name: Real
+  severity: low
+  classification:
+    cve-id: CVE-2024-1
+`)
+	// A dangling symlink whose name has a YAML suffix. Without the
+	// non-regular-file guard this would surface as a read error;
+	// with it, Walk silently skips it the same way the OSV walker
+	// skips non-regular entries.
+	link := filepath.Join(root, "linked.yaml")
+	if err := os.Symlink(filepath.Join(root, "does-not-exist.yaml"), link); err != nil {
+		t.Skipf("symlink unsupported on this filesystem: %v", err)
+	}
+
+	got, err := Walk(context.Background(), root)
+	if err != nil {
+		t.Fatalf("Walk: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "CVE-2024-1" {
+		t.Errorf("expected only the real template, got %+v", got)
+	}
+}
+
 func TestWalk_MalformedYAML_AbortsWithFileName(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, filepath.Join(root, "bad.yaml"), "id: [unterminated")
