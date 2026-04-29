@@ -7,10 +7,10 @@ import (
 	"time"
 )
 
-// RunAll runs the three Stage 4 annotators in order — KEV, EPSS,
-// ExploitDB — against an existing Stage 3 unified/ tree. Per-stage
-// elapsed time is written to w; passing nil for w is fine for tests /
-// scripts that don't want output.
+// RunAll runs the four Stage 4 annotators in order — KEV, EPSS,
+// ExploitDB, Nuclei — against an existing Stage 3 unified/ tree.
+// Per-stage elapsed time is written to w; passing nil for w is fine
+// for tests / scripts that don't want output.
 //
 // linePrefix is prepended verbatim to every timing line so the same
 // helper can serve `wisteria unify` (which wants its lines under a
@@ -19,10 +19,10 @@ import (
 // wants no extra prefix). Pass "" for the no-prefix shape.
 //
 // Order is fixed: KEV first (~1500 entries) to surface missing-target
-// issues quickly, then EPSS, then ExploitDB. The three annotators
-// write disjoint fields so a different order would be functionally
-// equivalent — but the timing log is easier to read when the cheapest
-// stage runs first.
+// issues quickly, then EPSS, then ExploitDB, then Nuclei. All four
+// annotators write disjoint fields so a different order would be
+// functionally equivalent — but the timing log is easier to read when
+// the cheapest stage runs first.
 //
 // First error wins: subsequent stages do not run. The error message is
 // prefixed with the stage name so callers can tell which annotator
@@ -35,6 +35,7 @@ func RunAll(ctx context.Context, sourcesRoot, outDir string, w io.Writer, linePr
 		{"kev", AnnotateKEV},
 		{"epss", AnnotateEPSS},
 		{"exploitdb", AnnotateExploitDB},
+		{"nuclei", AnnotateNuclei},
 	}
 	for _, s := range stages {
 		t := time.Now()
