@@ -39,6 +39,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/masahiro331/wisteria/internal/unified/cve"
 	"github.com/masahiro331/wisteria/internal/unified/kev"
@@ -79,10 +80,9 @@ func checkOSV(root string, perEco int, c *counter) {
 		}
 		files := sample(filepath.Join(osvRoot, e.Name()), perEco, ".json")
 		for _, p := range files {
+			path := p
 			diffOne(p, c, func(b []byte) (any, error) {
-				var v osv.Record
-				err := json.Unmarshal(b, &v)
-				return v, err
+				return osv.Parse(path, b)
 			})
 		}
 	}
@@ -149,7 +149,7 @@ func diffOne(path string, c *counter, parseTyped func([]byte) (any, error)) {
 		return
 	}
 	missing := []string{}
-	collectMissing("", normalize(rAny), normalize(tAny), &missing)
+	collectDiff("", normalize(rAny), normalize(tAny), &missing)
 	// Dedup within one file so a path that appears in many array elements
 	// still bumps the count by 1 here. Cross-file totals come from the
 	// per-file bumps.
@@ -163,10 +163,120 @@ func diffOne(path string, c *counter, parseTyped func([]byte) (any, error)) {
 	}
 }
 
-// collectMissing walks the raw tree; when a key/path appears in raw but not
-// in typed, record the path. `null`, `[]`, and `{}` on the raw side are all
-// treated as information-equivalent to "absent" — a typed schema is allowed
-// to drop them because reading the field yields the zero value either way.
+// collectDiff walks both trees and records every path where raw and typed
+// disagree — dropped keys (path), fabricated keys ("+"+path), array length
+// mismatches (path+":len"), and scalar value mismatches (path+":value").
+// `null` / `[]` / `{}` / `"0001-01-01T00:00:00Z"` on the raw side are
+// treated as absent-equivalent; the typed schema may legitimately drop
+// them via omitempty/omitzero because re-reading the field yields the
+// same zero value either way.
+//
+// Numbers are compared by their decoded float64 form (json.Unmarshal into
+// `any` decodes every JSON number that way), so `1` and `1.0` agree.
+func collectDiff(path string, raw, typed any, out *[]string) {
+	// Absent-equivalent raw is never a diff regardless of typed shape.
+	if isAbsentEquivalent(raw) {
+		return
+	}
+	switch r := raw.(type) {
+	case map[string]any:
+		t, ok := typed.(map[string]any)
+		if !ok {
+			// Typed dropped or replaced an entire object.
+			if path == "" {
+				*out = append(*out, "<root>:type")
+			} else {
+				*out = append(*out, path+":type")
+			}
+			return
+		}
+		for k, rv := range r {
+			child := joinPath(path, k)
+			tv, present := t[k]
+			if !present {
+				if isAbsentEquivalent(rv) {
+					continue
+				}
+				*out = append(*out, child)
+				continue
+			}
+			collectDiff(child, rv, tv, out)
+		}
+		// Also flag keys the typed side fabricated.
+		for k, tv := range t {
+			if _, ok := r[k]; ok {
+				continue
+			}
+			if isAbsentEquivalent(tv) {
+				continue
+			}
+			*out = append(*out, "+"+joinPath(path, k))
+		}
+	case []any:
+		t, ok := typed.([]any)
+		if !ok {
+			*out = append(*out, path+":type")
+			return
+		}
+		if len(r) != len(t) {
+			*out = append(*out, path+":len")
+			return
+		}
+		for i, rv := range r {
+			collectDiff(path+"[]", rv, t[i], out)
+		}
+	default:
+		// scalar
+		if !scalarEqual(raw, typed) {
+			if path == "" {
+				*out = append(*out, "<root>:value")
+			} else {
+				*out = append(*out, path+":value")
+			}
+		}
+	}
+}
+
+func joinPath(parent, key string) string {
+	if parent == "" {
+		return key
+	}
+	return parent + "." + key
+}
+
+func scalarEqual(a, b any) bool {
+	switch av := a.(type) {
+	case float64:
+		bv, ok := b.(float64)
+		return ok && av == bv
+	case string:
+		bv, ok := b.(string)
+		if !ok {
+			return false
+		}
+		if av == bv {
+			return true
+		}
+		// Two RFC3339 timestamps that parse to the same instant are
+		// equal even if their fractional-second textual form differs
+		// (e.g. "2009-11-20T18:30:00.327Z" vs Go's marshaled
+		// "2009-11-20T18:30:00.327000000Z"). Anything that fails to
+		// parse falls back to the strict string compare above.
+		ta, ea := time.Parse(time.RFC3339Nano, av)
+		tb, eb := time.Parse(time.RFC3339Nano, bv)
+		return ea == nil && eb == nil && ta.Equal(tb)
+	case bool:
+		bv, ok := b.(bool)
+		return ok && av == bv
+	case nil:
+		return b == nil
+	default:
+		return a == b
+	}
+}
+
+// collectMissing — legacy permissive walker kept for the existing tests
+// that pin its behavior. Strict diffing goes through collectDiff.
 func collectMissing(path string, raw, typed any, out *[]string) {
 	switch r := raw.(type) {
 	case map[string]any:
