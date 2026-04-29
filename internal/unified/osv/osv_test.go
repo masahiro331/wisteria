@@ -1,111 +1,78 @@
 package osv
 
 import (
+	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
 
-func TestUnmarshal_PYSEC_MultiAlias(t *testing.T) {
+// TestNewRecordPyPI_Fields confirms the embedded `Record` plus
+// PyPI-specific fields land in the typed struct.
+func TestNewRecordPyPI_Fields(t *testing.T) {
 	const body = `{
 		"id": "PYSEC-2021-872",
-		"aliases": ["CVE-2021-42343", "GHSA-hwqr-f3v9-hwxr", "GHSA-j8fq-86c5-5v2r", "PYSEC-2021-387", "PYSEC-2021-871"],
+		"aliases": ["CVE-2021-42343", "GHSA-hwqr-f3v9-hwxr"],
 		"summary": "Dask remote code execution.",
 		"details": "Dask 2021.10.0 and earlier ...",
 		"references": [
-			{"type": "ADVISORY", "url": "https://github.com/dask/dask/security/advisories/GHSA-hwqr-f3v9-hwxr"},
-			{"type": "FIX", "url": "https://github.com/dask/dask/commit/abcdef"}
+			{"type": "ADVISORY", "url": "https://example/a"},
+			{"type": "FIX", "url": "https://example/b"}
 		],
-		"severity": [
-			{"type": "CVSS_V3", "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}
-		],
-		"affected": [
-			{
-				"package": {"ecosystem": "PyPI", "name": "dask", "purl": "pkg:pypi/dask"},
-				"ranges": [
-					{"type": "ECOSYSTEM", "events": [{"introduced": "0"}, {"fixed": "2021.10.0"}]}
-				],
-				"versions": ["2021.9.1", "2021.9.0"],
-				"ecosystem_specific": {"foo": "bar"}
-			}
-		]
+		"severity": [{"type": "CVSS_V3", "score": "CVSS:3.1/AV:N"}],
+		"affected": [{
+			"package": {"ecosystem": "PyPI", "name": "dask", "purl": "pkg:pypi/dask"},
+			"ranges": [{"type": "ECOSYSTEM", "events": [{"introduced": "0"}, {"fixed": "2021.10.0"}]}],
+			"versions": ["2021.9.1", "2021.9.0"],
+			"database_specific": {"source": "https://example/x.json"}
+		}],
+		"database_specific": {"cwe_ids": ["CWE-78"], "github_reviewed": true, "severity": "HIGH"}
 	}`
-
-	var got Record
-	if err := json.Unmarshal([]byte(body), &got); err != nil {
-		t.Fatalf("Unmarshal: %v", err)
+	got, err := NewRecordPyPI(strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("NewRecordPyPI: %v", err)
 	}
-
+	if got.Ecosystem != EcosystemPyPI {
+		t.Errorf("Ecosystem = %v, want %v", got.Ecosystem, EcosystemPyPI)
+	}
 	if got.ID != "PYSEC-2021-872" {
 		t.Errorf("ID = %q", got.ID)
 	}
-	if len(got.Aliases) != 5 || got.Aliases[0] != "CVE-2021-42343" {
-		t.Errorf("Aliases = %v", got.Aliases)
-	}
-	if got.Summary == "" || got.Details == "" {
-		t.Errorf("Summary/Details should be populated")
-	}
-	if len(got.References) != 2 || got.References[1].Type != "FIX" {
-		t.Errorf("References = %#v", got.References)
-	}
-	if len(got.Severity) != 1 || got.Severity[0].Type != "CVSS_V3" {
-		t.Errorf("Severity = %#v", got.Severity)
-	}
-
 	if len(got.Affected) != 1 {
 		t.Fatalf("Affected len = %d", len(got.Affected))
 	}
-	a0 := got.Affected[0]
-	if a0.Package.Ecosystem != "PyPI" || a0.Package.Name != "dask" {
-		t.Errorf("Package = %#v", a0.Package)
+	a := got.Affected[0]
+	if a.Package == nil || a.Package.Name != "dask" {
+		t.Errorf("Package = %#v", a.Package)
 	}
-	if len(a0.Ranges) != 1 || a0.Ranges[0].Type != "ECOSYSTEM" {
-		t.Errorf("Ranges = %#v", a0.Ranges)
+	if a.DatabaseSpecific.Source != "https://example/x.json" {
+		t.Errorf("aff db.Source = %q", a.DatabaseSpecific.Source)
 	}
-	if len(a0.Ranges[0].Events) != 2 || a0.Ranges[0].Events[0].Introduced != "0" || a0.Ranges[0].Events[1].Fixed != "2021.10.0" {
-		t.Errorf("Events = %#v", a0.Ranges[0].Events)
+	if got.DatabaseSpecific.Severity != "HIGH" || !got.DatabaseSpecific.GitHubReviewed {
+		t.Errorf("Top = %#v", got.DatabaseSpecific)
 	}
-	if len(a0.Versions) != 2 {
-		t.Errorf("Versions len = %d", len(a0.Versions))
-	}
-}
-
-func TestUnmarshal_AlmaLinux_NoAliases(t *testing.T) {
-	const body = `{
-		"id": "ALBA-2019:0973",
-		"summary": "Moderate: 389-ds-base bug fix and enhancement update",
-		"details": "...",
-		"affected": [{"package": {"ecosystem": "AlmaLinux:8", "name": "389-ds-base"}}]
-	}`
-	var got Record
-	if err := json.Unmarshal([]byte(body), &got); err != nil {
-		t.Fatalf("Unmarshal: %v", err)
-	}
-	if got.ID != "ALBA-2019:0973" {
-		t.Errorf("ID = %q", got.ID)
-	}
-	if len(got.Aliases) != 0 {
-		t.Errorf("Aliases should be empty when absent, got %v", got.Aliases)
+	if len(got.DatabaseSpecific.CWEIDs) != 1 || got.DatabaseSpecific.CWEIDs[0] != "CWE-78" {
+		t.Errorf("CWEIDs = %v", got.DatabaseSpecific.CWEIDs)
 	}
 }
 
-func TestUnmarshal_FullTopLevelMetadata(t *testing.T) {
+// TestNewRecordPyPI_FullTopMetadata covers schema_version / published
+// / withdrawn / credits etc. against the embedded Record fields.
+func TestNewRecordPyPI_FullTopMetadata(t *testing.T) {
 	const body = `{
 		"schema_version": "1.7.3",
-		"id": "ALPINE-CVE-2009-3895",
+		"id": "GHSA-xyz",
 		"published": "2009-11-20T18:30:00.327Z",
 		"modified": "2025-11-19T05:57:42.162407Z",
 		"withdrawn": "2025-11-20T00:00:00Z",
 		"upstream": ["CVE-2009-3895"],
-		"related": ["GHSA-xyz"],
-		"credits": [
-			{"name": "Checkmarx", "contact": ["a@b", "https://example"], "type": "FINDER"}
-		],
-		"database_specific": {"iocs": {"domains": ["example.com"]}}
+		"credits": [{"name": "Checkmarx", "contact": ["a@b"], "type": "FINDER"}],
+		"database_specific": {"severity": "CRITICAL", "github_reviewed": true}
 	}`
-	var got Record
-	if err := json.Unmarshal([]byte(body), &got); err != nil {
-		t.Fatalf("Unmarshal: %v", err)
+	got, err := NewRecordPyPI(strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("NewRecordPyPI: %v", err)
 	}
 	if got.SchemaVersion != "1.7.3" {
 		t.Errorf("SchemaVersion = %q", got.SchemaVersion)
@@ -117,73 +84,124 @@ func TestUnmarshal_FullTopLevelMetadata(t *testing.T) {
 	if got.Withdrawn.IsZero() {
 		t.Errorf("Withdrawn should be set")
 	}
-	if len(got.Upstream) != 1 || got.Upstream[0] != "CVE-2009-3895" {
-		t.Errorf("Upstream = %v", got.Upstream)
-	}
-	if len(got.Related) != 1 {
-		t.Errorf("Related = %v", got.Related)
-	}
-	if len(got.Credits) != 1 || got.Credits[0].Name != "Checkmarx" || got.Credits[0].Type != "FINDER" {
+	if len(got.Credits) != 1 || got.Credits[0].Name != "Checkmarx" {
 		t.Errorf("Credits = %#v", got.Credits)
 	}
-	if len(got.Credits[0].Contact) != 2 {
-		t.Errorf("Contact = %v", got.Credits[0].Contact)
+}
+
+// TestParse_DispatchesByEcosystem confirms the dynamic Parse entry
+// returns the right concrete type. The dispatch table is exhaustive,
+// so type-asserting after Parse is a 1-line operation at the call
+// site.
+func TestParse_DispatchesByEcosystem(t *testing.T) {
+	const body = `{"id": "X-1"}`
+	rec, err := Parse(EcosystemPyPI, strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
 	}
-	if len(got.DatabaseSpecific) == 0 {
-		t.Errorf("DatabaseSpecific raw should be populated")
+	if _, ok := rec.(*RecordPyPI); !ok {
+		t.Fatalf("Parse returned %T, want *RecordPyPI", rec)
+	}
+	if rec.Base().ID != "X-1" {
+		t.Errorf("ID via Base() = %q", rec.Base().ID)
+	}
+	if rec.Base().Ecosystem != EcosystemPyPI {
+		t.Errorf("Ecosystem via Base() = %v", rec.Base().Ecosystem)
 	}
 }
 
-func TestUnmarshal_AffectedSeverityAndRangeDatabaseSpecific(t *testing.T) {
-	const body = `{
-		"id": "x",
-		"affected": [{
-			"package": {"ecosystem": "PyPI", "name": "p"},
-			"severity": [{"type": "CVSS_V3", "score": "CVSS:3.1/AV:N"}],
-			"ranges": [{
-				"type": "ECOSYSTEM",
-				"events": [{"introduced": "0"}],
-				"database_specific": {"source": "https://example/x"}
-			}]
-		}]
-	}`
-	var got Record
-	if err := json.Unmarshal([]byte(body), &got); err != nil {
-		t.Fatalf("Unmarshal: %v", err)
-	}
-	a := got.Affected[0]
-	if len(a.Severity) != 1 || a.Severity[0].Type != "CVSS_V3" {
-		t.Errorf("Affected[0].Severity = %#v", a.Severity)
-	}
-	if len(a.Ranges[0].DatabaseSpecific) == 0 {
-		t.Errorf("Range.DatabaseSpecific raw should be populated")
+// TestParse_UnknownEcosystem — Ecosystem values outside the constant
+// block must hard-error; the dispatch table is closed.
+func TestParse_UnknownEcosystem(t *testing.T) {
+	if _, err := Parse(Ecosystem(9999), strings.NewReader(`{}`)); err == nil {
+		t.Fatal("Parse must error on unknown Ecosystem")
 	}
 }
 
-func TestUnmarshal_PreservesEcosystemSpecificAsRawJSON(t *testing.T) {
-	// ecosystem_specific is a free-form object; we keep it as raw JSON so
-	// later stages can re-marshal it untouched.
-	const body = `{
-		"id": "x",
-		"affected": [{
-			"package": {"ecosystem": "Go", "name": "example"},
-			"ecosystem_specific": {"vendor": "ACME", "nested": {"a": 1}}
-		}]
-	}`
-	var got Record
-	if err := json.Unmarshal([]byte(body), &got); err != nil {
-		t.Fatalf("Unmarshal: %v", err)
+// TestEcosystemFromString covers verbatim and space-normalized forms.
+func TestEcosystemFromString(t *testing.T) {
+	cases := []struct {
+		in   string
+		want Ecosystem
+	}{
+		{"PyPI", EcosystemPyPI},
+		{"Red Hat", EcosystemRedHat},
+		{"Red_Hat", EcosystemRedHat}, // walker uses the underscore form
+		{"crates.io", EcosystemCratesIO},
 	}
-	raw := string(got.Affected[0].EcosystemSpecific)
-	if raw == "" {
-		t.Fatal("EcosystemSpecific raw is empty")
+	for _, tc := range cases {
+		got, err := EcosystemFromString(tc.in)
+		if err != nil {
+			t.Errorf("EcosystemFromString(%q): %v", tc.in, err)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("EcosystemFromString(%q) = %v, want %v", tc.in, got, tc.want)
+		}
 	}
-	// Round-trip: must unmarshal back to a map without loss.
-	var back map[string]any
-	if err := json.Unmarshal(got.Affected[0].EcosystemSpecific, &back); err != nil {
-		t.Fatalf("re-unmarshal raw: %v", err)
+	if _, err := EcosystemFromString("Unknown"); err == nil {
+		t.Error("EcosystemFromString must error on unknown name")
 	}
-	if back["vendor"] != "ACME" {
-		t.Errorf("vendor lost in round-trip: %v", back)
+}
+
+// TestRoundTrip_PyPI confirms parse → marshal yields JSON
+// semantically equal to the input for representative PyPI shapes.
+// The full corpus check lives in tools/schema-coverage; this test
+// pins the high-traffic shapes so a regression surfaces in
+// `make test` without running the verifier.
+func TestRoundTrip_PyPI(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "GHSA top + affected source",
+			body: `{"id":"GHSA-x","affected":[{"package":{"ecosystem":"PyPI","name":"pkg"},"database_specific":{"source":"https://example/m.json"}}],"database_specific":{"cwe_ids":["CWE-78"],"github_reviewed":true,"severity":"HIGH"}}`,
+		},
+		{
+			name: "Malicious-packages origin",
+			body: `{"id":"MAL-1","affected":[{"package":{"ecosystem":"PyPI","name":"x"},"database_specific":{"source":"https://example/m.json"}}],"database_specific":{"malicious-packages-origins":[{"id":"OSSF-1","import_time":"2023-08-24T15:12:15.962383Z","sha256":"abc","source":"checkmarx","versions":["1.0"]}]}}`,
+		},
+		{
+			name: "Affected severity as label",
+			body: `{"id":"OSV-2021-1","affected":[{"package":{"ecosystem":"PyPI","name":"y"},"ecosystem_specific":{"severity":"HIGH"},"database_specific":{"source":"https://example/y.json"}}]}`,
+		},
+		{
+			name: "Affected severity as array",
+			body: `{"id":"GHSA-y","affected":[{"package":{"ecosystem":"PyPI","name":"z"},"ecosystem_specific":{"severity":[{"type":"CVSS_V3","score":"CVSS:3.1/AV:N"}]},"database_specific":{"source":"https://example/z.json"}}]}`,
+		},
 	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec, err := NewRecordPyPI(strings.NewReader(tc.body))
+			if err != nil {
+				t.Fatalf("NewRecordPyPI: %v", err)
+			}
+			out, err := json.Marshal(rec)
+			if err != nil {
+				t.Fatalf("Marshal: %v", err)
+			}
+			if !equalJSON(t, []byte(tc.body), out) {
+				inB, _ := json.MarshalIndent(jsonAny(t, []byte(tc.body)), "", "  ")
+				outB, _ := json.MarshalIndent(jsonAny(t, out), "", "  ")
+				t.Errorf("round-trip diff:\n in = %s\nout = %s", inB, outB)
+			}
+		})
+	}
+}
+
+func equalJSON(t *testing.T, a, b []byte) bool {
+	t.Helper()
+	aa, _ := json.Marshal(jsonAny(t, a))
+	bb, _ := json.Marshal(jsonAny(t, b))
+	return bytes.Equal(aa, bb)
+}
+
+func jsonAny(t *testing.T, b []byte) any {
+	t.Helper()
+	var v any
+	if err := json.Unmarshal(b, &v); err != nil {
+		t.Fatalf("unmarshal %s: %v", b, err)
+	}
+	return v
 }

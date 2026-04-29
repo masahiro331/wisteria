@@ -2,12 +2,17 @@
 //
 // Walks <root> (default ./tmp/sources), parses each file two ways:
 //
-//	A) into the typed schema (osv.Record / cve.Record / kev.Catalog)
+//	A) into the typed schema (osv ecosystem-typed Record /
+//	   cve.Record / kev.Catalog)
 //	B) into interface{}
 //
-// re-marshals both, normalizes empty values, and reports any JSON path
-// present in (B) but missing from (A). Sampling per ecosystem / per year
-// keeps runtime sane on the full upstream corpus.
+// re-marshals (A) and diffs against (B). Strict mode: dropped keys,
+// fabricated keys, scalar value mismatches, and array length
+// mismatches all surface in the report. Sub-second timestamp
+// reformatting (Go's `time.Time` re-emits `.327Z` as `.327000000Z`)
+// is normalised, and absent-equivalent raw values
+// (null / [] / {} / "0001-01-01T00:00:00Z") are silently accepted as
+// drops.
 //
 // This is a dev-time diagnostic, not a runtime tool. It is deliberately
 // outside cmd/ and internal/ so it does not ship in the wisteria binary.
@@ -31,6 +36,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -39,6 +45,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/masahiro331/wisteria/internal/unified/cve"
 	"github.com/masahiro331/wisteria/internal/unified/kev"
@@ -47,8 +54,8 @@ import (
 
 func main() {
 	root := flag.String("root", "tmp/sources", "sources root")
-	perEcosystem := flag.Int("per-ecosystem", 50, "OSV files per ecosystem to sample")
-	perYear := flag.Int("per-year", 50, "CVE files per year to sample")
+	perEcosystem := flag.Int("per-ecosystem", 50, "OSV files per ecosystem to sample (0 = no limit)")
+	perYear := flag.Int("per-year", 50, "CVE files per year to sample (0 = no limit)")
 	flag.Parse()
 
 	missingOSV := newCounter()
@@ -77,12 +84,15 @@ func checkOSV(root string, perEco int, c *counter) {
 		if !e.IsDir() {
 			continue
 		}
+		eco, err := osv.EcosystemFromString(e.Name())
+		if err != nil {
+			c.bump("__ecosystem_unknown__:"+e.Name(), filepath.Join(osvRoot, e.Name()))
+			continue
+		}
 		files := sample(filepath.Join(osvRoot, e.Name()), perEco, ".json")
 		for _, p := range files {
 			diffOne(p, c, func(b []byte) (any, error) {
-				var v osv.Record
-				err := json.Unmarshal(b, &v)
-				return v, err
+				return osv.Parse(eco, bytes.NewReader(b))
 			})
 		}
 	}
@@ -90,7 +100,6 @@ func checkOSV(root string, perEco int, c *counter) {
 
 func checkCVE(root string, perYear int, c *counter) {
 	cveRoot := filepath.Join(root, "cve")
-	// CVE files live under cve/cvelistV5-main/cves/<year>/<bucket>/CVE-*.json
 	yearsBase, err := findYearsRoot(cveRoot)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "cve year root:", err)
@@ -149,10 +158,7 @@ func diffOne(path string, c *counter, parseTyped func([]byte) (any, error)) {
 		return
 	}
 	missing := []string{}
-	collectMissing("", normalize(rAny), normalize(tAny), &missing)
-	// Dedup within one file so a path that appears in many array elements
-	// still bumps the count by 1 here. Cross-file totals come from the
-	// per-file bumps.
+	collectDiff("", normalize(rAny), normalize(tAny), &missing)
 	seen := map[string]bool{}
 	for _, m := range missing {
 		if seen[m] {
@@ -163,69 +169,138 @@ func diffOne(path string, c *counter, parseTyped func([]byte) (any, error)) {
 	}
 }
 
-// collectMissing walks the raw tree; when a key/path appears in raw but not
-// in typed, record the path. `null`, `[]`, and `{}` on the raw side are all
-// treated as information-equivalent to "absent" — a typed schema is allowed
-// to drop them because reading the field yields the zero value either way.
-func collectMissing(path string, raw, typed any, out *[]string) {
+// collectDiff walks both trees and records every path where raw and
+// typed disagree — dropped keys (path), fabricated keys ("+"+path),
+// array length mismatches (path+":len"), and scalar value mismatches
+// (path+":value"). `null` / `[]` / `{}` / `"0001-01-01T00:00:00Z"`
+// on the raw side are treated as absent-equivalent; the typed schema
+// may legitimately drop them.
+//
+// Numbers are compared by their decoded float64 form (json.Unmarshal
+// into `any` decodes every JSON number that way), so `1` and `1.0`
+// agree.
+func collectDiff(path string, raw, typed any, out *[]string) {
+	if isAbsentEquivalent(raw) {
+		return
+	}
 	switch r := raw.(type) {
 	case map[string]any:
-		t, _ := typed.(map[string]any)
-		for k, rv := range r {
-			child := path + "." + k
+		t, ok := typed.(map[string]any)
+		if !ok {
 			if path == "" {
-				child = k
+				*out = append(*out, "<root>:type")
+			} else {
+				*out = append(*out, path+":type")
 			}
-			tv, ok := t[k]
-			if !ok {
+			return
+		}
+		for k, rv := range r {
+			child := joinPath(path, k)
+			tv, present := t[k]
+			if !present {
 				if isAbsentEquivalent(rv) {
 					continue
 				}
 				*out = append(*out, child)
 				continue
 			}
-			collectMissing(child, rv, tv, out)
+			collectDiff(child, rv, tv, out)
+		}
+		for k, tv := range t {
+			if _, ok := r[k]; ok {
+				continue
+			}
+			if isAbsentEquivalent(tv) {
+				continue
+			}
+			*out = append(*out, "+"+joinPath(path, k))
 		}
 	case []any:
-		t, _ := typed.([]any)
-		// Union every element of raw with the matching element on the typed
-		// side (or the first typed element if shorter), so missing fields
-		// that only show up in non-leading entries still surface.
+		t, ok := typed.([]any)
+		if !ok {
+			*out = append(*out, path+":type")
+			return
+		}
+		if len(r) != len(t) {
+			*out = append(*out, path+":len")
+			return
+		}
 		for i, rv := range r {
-			var tv any
-			switch {
-			case i < len(t):
-				tv = t[i]
-			case len(t) > 0:
-				tv = t[0]
-			}
-			collectMissing(path+"[]", rv, tv, out)
+			collectDiff(path+"[]", rv, t[i], out)
 		}
 	default:
-		// scalars: ignore value diffs (we only care about lost fields)
+		if !scalarEqual(raw, typed) {
+			if path == "" {
+				*out = append(*out, "<root>:value")
+			} else {
+				*out = append(*out, path+":value")
+			}
+		}
 	}
 }
 
-// normalize is a passthrough today. Earlier versions stripped empty values
-// to suppress noise, but that masked omitempty-driven dropouts; the diff is
-// strict instead, with isAbsentEquivalent handling the narrow exceptions
-// (null, [], {}) at the comparison site.
+func joinPath(parent, key string) string {
+	if parent == "" {
+		return key
+	}
+	return parent + "." + key
+}
+
+func scalarEqual(a, b any) bool {
+	switch av := a.(type) {
+	case float64:
+		bv, ok := b.(float64)
+		return ok && av == bv
+	case string:
+		bv, ok := b.(string)
+		if !ok {
+			return false
+		}
+		if av == bv {
+			return true
+		}
+		// Two RFC3339 timestamps that parse to the same instant are
+		// equal even if their fractional-second textual form differs.
+		ta, ea := time.Parse(time.RFC3339Nano, av)
+		tb, eb := time.Parse(time.RFC3339Nano, bv)
+		return ea == nil && eb == nil && ta.Equal(tb)
+	case bool:
+		bv, ok := b.(bool)
+		return ok && av == bv
+	case nil:
+		return b == nil
+	default:
+		return a == b
+	}
+}
+
+// normalize is a passthrough today.
 func normalize(v any) any { return v }
 
 // isAbsentEquivalent reports whether a raw upstream value carries no
-// information beyond its bare presence — JSON null, an empty array, an
-// empty object, or Go's zero time stamp ("0001-01-01T00:00:00Z") that some
-// upstream catalogs (e.g. Debian OSV) emit literally for unset fields. The
-// typed schema is allowed to drop these via omitzero/omitempty because
-// re-reading the field produces the same zero value.
+// information beyond its bare presence — JSON null, an empty array
+// (or one whose every element is absent-equivalent), an empty object
+// (or one whose every value is absent-equivalent), or Go's zero time
+// stamp ("0001-01-01T00:00:00Z"). Recursive so wrappers like
+// `{"malicious-packages-origins": null}` are treated as absent too.
 func isAbsentEquivalent(v any) bool {
 	switch x := v.(type) {
 	case nil:
 		return true
 	case []any:
-		return len(x) == 0
+		for _, e := range x {
+			if !isAbsentEquivalent(e) {
+				return false
+			}
+		}
+		return true
 	case map[string]any:
-		return len(x) == 0
+		for _, e := range x {
+			if !isAbsentEquivalent(e) {
+				return false
+			}
+		}
+		return true
 	case string:
 		return x == "0001-01-01T00:00:00Z"
 	default:
@@ -235,8 +310,6 @@ func isAbsentEquivalent(v any) bool {
 
 // ----- helpers -----
 
-// counter tracks per-path occurrence counts and a few example file paths so
-// the report points the operator straight at the upstream files to grep.
 type counter struct {
 	count   map[string]int
 	samples map[string][]string
@@ -292,7 +365,7 @@ func sample(dir string, n int, ext string) []string {
 			return nil
 		}
 		out = append(out, p)
-		if len(out) >= n {
+		if n > 0 && len(out) >= n {
 			return fs.SkipAll
 		}
 		return nil
@@ -301,7 +374,6 @@ func sample(dir string, n int, ext string) []string {
 }
 
 func findYearsRoot(cveRoot string) (string, error) {
-	// cve/cvelistV5-main/cves/<year>/...
 	candidates, _ := filepath.Glob(filepath.Join(cveRoot, "*", "cves"))
 	if len(candidates) > 0 {
 		return candidates[0], nil

@@ -14,8 +14,10 @@ func TestMergeAffected(t *testing.T) {
 	provAlma := unified.Provenance{Kind: unified.SourceOSV, Path: "osv/AlmaLinux/ALSA-1.json", ID: "ALSA-1"}
 	provGit := unified.Provenance{Kind: unified.SourceOSV, Path: "osv/GitHub Reviewed/GHSA-1.json", ID: "GHSA-1"}
 
-	osvAff := func(name string) *osv.Affected {
-		return &osv.Affected{Package: osv.Package{Name: name, Ecosystem: "PyPI"}}
+	osvAff := func(name string) *osv.AffectedAlmaLinux {
+		return &osv.AffectedAlmaLinux{
+			AffectedBase: osv.AffectedBase{Package: &osv.Package{Name: name, Ecosystem: "AlmaLinux"}},
+		}
 	}
 	cveAff := func(product string) *cve.Affected {
 		return &cve.Affected{Vendor: "acme", Product: product}

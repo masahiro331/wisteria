@@ -164,8 +164,16 @@ func TestDebugUnify_Affected(t *testing.T) {
 	if got.Affected[1].CVE == nil || got.Affected[1].CVE.Product != "widget-adp" {
 		t.Errorf("Affected[1] CVE = %#v", got.Affected[1].CVE)
 	}
-	if got.Affected[2].OSV == nil || got.Affected[2].OSV.Package.Name != "pkgA" {
-		t.Errorf("Affected[2] OSV = %#v", got.Affected[2].OSV)
+	// got.Affected[2].OSV decodes back to a generic map because the
+	// JSON pipeline went OSV-AffectedX → marshal → unmarshal-into-any
+	// in this test. Check the package name via the map.
+	osvAff, _ := got.Affected[2].OSV.(map[string]any)
+	if osvAff == nil {
+		t.Fatalf("Affected[2] OSV is nil/wrong type: %#v", got.Affected[2].OSV)
+	}
+	pkg, _ := osvAff["package"].(map[string]any)
+	if pkg == nil || pkg["name"] != "pkgA" {
+		t.Errorf("Affected[2] OSV package = %#v", osvAff["package"])
 	}
 }
 

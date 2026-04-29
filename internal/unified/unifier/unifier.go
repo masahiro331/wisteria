@@ -66,16 +66,17 @@ func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []
 		addSourceID(e.SourceID)
 		switch e.Kind {
 		case unified.SourceOSV:
-			rec, err := readOSV(path)
+			rec, err := readOSV(path, e.Source)
 			if err != nil {
 				return unified.UnifiedAdvisory{}, fmt.Errorf("%s: %w", e.Path, err)
 			}
+			base := rec.Base()
 			source := SourceTag(e.Kind, e.Source)
-			refs = append(refs, OSVReferences(rec.References)...)
-			descs = append(descs, OSVDescriptions(rec, prov, source)...)
-			sevs = append(sevs, OSVSeverities(rec.Severity, prov, source)...)
-			affs = append(affs, OSVAffectedRecords(rec.Affected, prov, source)...)
-			for _, a := range rec.Aliases {
+			refs = append(refs, OSVReferences(base.References)...)
+			descs = append(descs, OSVDescriptions(*base, prov, source)...)
+			sevs = append(sevs, OSVSeverities(base.Severity, prov, source)...)
+			affs = append(affs, OSVAffectedRecords(rec, prov, source)...)
+			for _, a := range base.Aliases {
 				addSourceID(a)
 			}
 		case unified.SourceCVE:
@@ -126,16 +127,21 @@ func sortedSet(m map[string]struct{}) []string {
 	return out
 }
 
-func readOSV(path string) (osv.Record, error) {
-	b, err := os.ReadFile(path)
+// readOSV resolves the per-ecosystem typed parser via osv.Parse and
+// returns the typed Record under the OSVRecord interface. ecoName is
+// the on-disk ecosystem directory name as walker carved it out of the
+// path (whitespace already replaced by `_`).
+func readOSV(path, ecoName string) (osv.OSVRecord, error) {
+	eco, err := osv.EcosystemFromString(ecoName)
 	if err != nil {
-		return osv.Record{}, err
+		return nil, err
 	}
-	var r osv.Record
-	if err := json.Unmarshal(b, &r); err != nil {
-		return osv.Record{}, err
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
 	}
-	return r, nil
+	defer f.Close()
+	return osv.Parse(eco, f)
 }
 
 func readCVE(path string) (cve.Record, error) {
