@@ -93,17 +93,18 @@ unify 実行時は `<cache-dir>/unified` を最初に削除してから書き直
 
 理由: 当初 standalone advisory として保存された (例: `GHSA-xxxx`) ものに、後日 `aliases: ["CVE-2024-9999"]` が付くケースがある。差分更新方式や上書き方式だと過去の standalone レコードが消えず二重に残る。フル削除 → フル書き直しなら毎回最新 sources の状態だけを反映できる。
 
-### 5.2 Stage 4: Annotate (KEV / EPSS / Exploit-DB 後付け)
+### 5.2 Stage 4: Annotate (KEV / EPSS / Exploit-DB / Nuclei 後付け)
 
-Stage 1-3 が書き出した unified ファイル群に対し、外部シグナル (KEV / EPSS / Exploit-DB) を読み込んで CVE-ID に該当する unified ファイルを開き、対応するフィールドを更新して書き戻す。
+Stage 1-3 が書き出した unified ファイル群に対し、外部シグナル (KEV / EPSS / Exploit-DB / Nuclei) を読み込んで CVE-ID に該当する unified ファイルを開き、対応するフィールドを更新して書き戻す。
 
 - 入力ソース:
   - KEV: `<sourcesRoot>/kev/known_exploited_vulnerabilities.json` (JSON)
   - EPSS: `<sourcesRoot>/epss/epss_scores-current.csv` (download 時に gzip 展開済みの plain CSV)
   - Exploit-DB: `<sourcesRoot>/exploitdb/files_exploits.csv` (1 行 = 1 exploit、`codes` カラムに CVE-ID を 0 個以上)
+  - Nuclei: `<sourcesRoot>/nuclei/nuclei-templates-main/**/*.yaml` (1 ファイル = 1 検知テンプレート、`info.classification.cve-id` に CVE-ID を 0 個以上)
 - 該当 PrimaryID の unified ファイルが存在しない CVE-ID は **silent skip**。各カタログには他 source に観測されていない CVE もありうる前提。これを「シグナルだけの standalone unified」として作るかは未決定 (§12 参照)。
 - ファイル更新は plain `os.WriteFile`。Stage 4 はフル再構築の後段で動くため、書き込み中断時は次回 `wisteria unify` が Stage 1-3 から再生成する。
-- Stage 4 は Stage 3 への依存があるため、`wisteria unify` は 1-3-4 を直列で回す。Stage 4 内の順序は KEV → EPSS → Exploit-DB (各シグナルは互いに独立、別フィールド)。
+- Stage 4 は Stage 3 への依存があるため、`wisteria unify` は 1-3-4 を直列で回す。Stage 4 内の順序は KEV → EPSS → Exploit-DB → Nuclei (各シグナルは互いに独立、別フィールド)。
 - 後付けは Stage 1-3 のフル再構築の後段で行うので、毎回最新カタログを反映できる (差分更新の懸念なし)。
 
 ## 6. パッケージ構成
@@ -117,10 +118,11 @@ internal/
     ├── kev/                    # KEV schema (catalog + entry)
     ├── epss/                   # EPSS CSV row schema
     ├── exploitdb/              # Exploit-DB CSV row schema (Stage 4 入力)
+    ├── nuclei/                 # Nuclei template YAML schema + Walk (Stage 4 入力)
     ├── walker/                 # Stage 1
     ├── unifier/                # Stage 2 (per-PrimaryID merge + sort helper)
     ├── writer/                 # Stage 3 (atomic write + standalone bucket routing)
-    ├── annotator/              # Stage 4 (KEV / EPSS / ExploitDB の後付け)
+    ├── annotator/              # Stage 4 (KEV / EPSS / ExploitDB / Nuclei の後付け)
     └── pipeline/               # Stage 1-4 の直列オーケストレーション
 
 cmd/

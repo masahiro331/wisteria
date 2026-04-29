@@ -23,6 +23,7 @@ const (
 	SourceKEV       SourceKind = "kev"
 	SourceEPSS      SourceKind = "epss"
 	SourceExploitDB SourceKind = "exploitdb"
+	SourceNuclei    SourceKind = "nuclei"
 )
 
 // Provenance is the "where did this come from" trail attached to every
@@ -122,18 +123,34 @@ type ExploitDBRecord struct {
 	Verified      bool       `json:"verified"`
 }
 
+// NucleiTemplate is one projectdiscovery/nuclei-templates entry that
+// claims to detect a given CVE-ID via its info.classification.cve-id
+// field. Stage 4 attaches one or more of these to an existing
+// UnifiedAdvisory: a CVE can have multiple templates (different
+// product variants, different platforms), so UnifiedAdvisory.NucleiTemplates
+// is a slice and the catalog's natural walk order is preserved.
+type NucleiTemplate struct {
+	From       Provenance `json:"from"`
+	ID         string     `json:"id"`                   // template id, e.g. CVE-2021-44228
+	Name       string     `json:"name,omitempty"`       // info.name
+	Severity   string     `json:"severity,omitempty"`   // info / low / medium / high / critical
+	Tags       []string   `json:"tags,omitempty"`       // info.tags split
+	References []string   `json:"references,omitempty"` // info.reference
+}
+
 // UnifiedAdvisory is the merged record keyed by PrimaryID. SourceIDs holds
 // every other identifier the same vuln is known by (dedup + sorted), so a
 // caller searching by GHSA / PYSEC / ALBA still finds the CVE-keyed file.
 type UnifiedAdvisory struct {
-	PrimaryID    string            `json:"primary_id"`
-	SourceIDs    []string          `json:"source_ids,omitempty"`
-	Descriptions []Description     `json:"descriptions"`
-	References   []Reference       `json:"references"`
-	Severities   []Severity        `json:"severities"`
-	Affected     []AffectedRecord  `json:"affected"`
-	KEV          *KEVRecord        `json:"kev,omitempty"`
-	EPSS         *EPSSScore        `json:"epss,omitempty"`
-	Exploits     []ExploitDBRecord `json:"exploits,omitempty"`
-	Provenances  []Provenance      `json:"provenances"`
+	PrimaryID       string            `json:"primary_id"`
+	SourceIDs       []string          `json:"source_ids,omitempty"`
+	Descriptions    []Description     `json:"descriptions"`
+	References      []Reference       `json:"references"`
+	Severities      []Severity        `json:"severities"`
+	Affected        []AffectedRecord  `json:"affected"`
+	KEV             *KEVRecord        `json:"kev,omitempty"`
+	EPSS            *EPSSScore        `json:"epss,omitempty"`
+	Exploits        []ExploitDBRecord `json:"exploits,omitempty"`
+	NucleiTemplates []NucleiTemplate  `json:"nuclei_templates,omitempty"`
+	Provenances     []Provenance      `json:"provenances"`
 }
