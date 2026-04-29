@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/masahiro331/wisteria/internal/unified"
@@ -229,7 +230,13 @@ func TestAnnotateNuclei_MalformedYAMLAborts(t *testing.T) {
 	outDir := filepath.Join(root, "unified")
 
 	writeNucleiTemplate(t, sourcesRoot, "broken.yaml", "id: [unterminated")
-	if err := annotator.AnnotateNuclei(context.Background(), sourcesRoot, outDir); err == nil {
+	err := annotator.AnnotateNuclei(context.Background(), sourcesRoot, outDir)
+	if err == nil {
 		t.Fatal("expected error on malformed YAML")
+	}
+	// The aborted error must surface the offending file so a debug
+	// session can locate it without grepping the tree.
+	if !strings.Contains(err.Error(), "broken.yaml") {
+		t.Errorf("error %q does not mention the offending file", err)
 	}
 }
