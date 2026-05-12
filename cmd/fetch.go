@@ -11,6 +11,7 @@ import (
 	"github.com/masahiro331/wisteria/internal/fetcher/epss"
 	"github.com/masahiro331/wisteria/internal/fetcher/exploitdb"
 	"github.com/masahiro331/wisteria/internal/fetcher/kev"
+	"github.com/masahiro331/wisteria/internal/fetcher/nuclei"
 	"github.com/masahiro331/wisteria/internal/fetcher/osv"
 	"github.com/masahiro331/wisteria/internal/fetcher/progress"
 )
@@ -67,6 +68,14 @@ func exploitDBFactory(opts fetchOptions) fetcher.Fetcher {
 	)
 }
 
+func nucleiFactory(opts fetchOptions) fetcher.Fetcher {
+	return nuclei.New(
+		nuclei.WithCacheDir(opts.cacheDir),
+		nuclei.WithProgress(opts.tracker),
+		nuclei.WithRetries(opts.retries),
+	)
+}
+
 func optionsFromCmd(cmd *cobra.Command) fetchOptions {
 	cacheDir, _ := cmd.Flags().GetString(cacheDirFlag)
 	concurrency, _ := cmd.Flags().GetInt(concurrencyFlag)
@@ -101,6 +110,7 @@ func newFetchCmd() *cobra.Command {
 		newFetchSourceCmd("kev", "Fetch CISA Known Exploited Vulnerabilities catalog", kevFactory),
 		newFetchSourceCmd("epss", "Fetch FIRST EPSS daily score catalog", epssFactory),
 		newFetchSourceCmd("exploitdb", "Fetch Exploit-DB files_exploits.csv catalog", exploitDBFactory),
+		newFetchSourceCmd("nuclei", "Fetch projectdiscovery/nuclei-templates archive", nucleiFactory),
 		newFetchAllCmd(),
 	)
 	return c
@@ -136,7 +146,7 @@ func newFetchAllCmd() *cobra.Command {
 		Use:   "all",
 		Short: "Fetch every supported source",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			factories := []fetcherFactory{osvFactory, cveFactory, kevFactory, epssFactory, exploitDBFactory}
+			factories := []fetcherFactory{osvFactory, cveFactory, kevFactory, epssFactory, exploitDBFactory, nucleiFactory}
 			for _, factory := range factories {
 				f := factory(optionsFromCmd(cmd))
 				dir, err := f.Fetch(cmd.Context())

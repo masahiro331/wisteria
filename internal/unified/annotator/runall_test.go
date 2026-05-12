@@ -19,7 +19,18 @@ import (
 const runallExploitDBCSV = exploitdbHeader + "\n" +
 	`1,exploits/x.txt,Demo,2024-01-01,author,remote,linux,,2024-01-01,,1,CVE-2024-0001,tag,,,,`
 
-func TestRunAll_RunsAllThreeAnnotators(t *testing.T) {
+// minimal Nuclei template for the RunAll happy-path test. One YAML
+// pinned at a known path so the assertion below stays readable;
+// per-stage parsing is already covered in nuclei_test.go.
+const runallNucleiYAML = `id: CVE-2024-0001
+info:
+  name: Demo
+  severity: high
+  classification:
+    cve-id: CVE-2024-0001
+`
+
+func TestRunAll_RunsAllFourAnnotators(t *testing.T) {
 	root := t.TempDir()
 	sourcesRoot := filepath.Join(root, "sources")
 	outDir := filepath.Join(root, "unified")
@@ -27,6 +38,7 @@ func TestRunAll_RunsAllThreeAnnotators(t *testing.T) {
 	writeKEVCatalog(t, sourcesRoot, kevCatalogJSON)
 	writeEPSSCatalog(t, sourcesRoot, epssCSV)
 	writeExploitDBCatalog(t, sourcesRoot, runallExploitDBCSV)
+	writeNucleiTemplate(t, sourcesRoot, "CVE-2024-0001.yaml", runallNucleiYAML)
 	target := writeUnifiedCVE(t, outDir, "CVE-2024-0001")
 
 	var buf bytes.Buffer
@@ -51,11 +63,14 @@ func TestRunAll_RunsAllThreeAnnotators(t *testing.T) {
 	if len(got.Exploits) == 0 {
 		t.Error("Exploits not attached")
 	}
+	if len(got.NucleiTemplates) == 0 {
+		t.Error("NucleiTemplates not attached")
+	}
 
 	// The progress writer should mention every stage so callers (cmd/unify,
 	// cmd/debug/annotate) get a per-stage timing line.
 	out := buf.String()
-	for _, want := range []string{"kev", "epss", "exploitdb"} {
+	for _, want := range []string{"kev", "epss", "exploitdb", "nuclei"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("RunAll output missing %q stage line; got:\n%s", want, out)
 		}
@@ -78,7 +93,7 @@ func TestRunAll_LinePrefixWrapsTimingLines(t *testing.T) {
 		t.Fatalf("RunAll: %v", err)
 	}
 	out := buf.String()
-	for _, line := range []string{"stage 4 annotate kev:", "stage 4 annotate epss:", "stage 4 annotate exploitdb:"} {
+	for _, line := range []string{"stage 4 annotate kev:", "stage 4 annotate epss:", "stage 4 annotate exploitdb:", "stage 4 annotate nuclei:"} {
 		if !strings.Contains(out, line) {
 			t.Errorf("RunAll output missing %q; got:\n%s", line, out)
 		}
