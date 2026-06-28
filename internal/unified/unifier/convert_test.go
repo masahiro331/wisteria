@@ -5,6 +5,7 @@ import (
 
 	"github.com/masahiro331/wisteria/internal/unified"
 	"github.com/masahiro331/wisteria/internal/unified/osv"
+	"github.com/masahiro331/wisteria/internal/unified/osv/ecosystem"
 )
 
 // TestOSVAffectedRecords_PreservesConcreteType checks that the
@@ -14,9 +15,9 @@ import (
 func TestOSVAffectedRecords_PreservesConcreteType(t *testing.T) {
 	prov := unified.Provenance{Kind: unified.SourceOSV, Path: "osv/PyPI/x.json", ID: "PYSEC-1"}
 
-	rec := &osv.RecordPyPI{
+	rec := &ecosystem.RecordPyPI{
 		Record: osv.Record{Ecosystem: osv.EcosystemPyPI, ID: "PYSEC-1"},
-		Affected: []osv.AffectedPyPI{
+		Affected: []ecosystem.AffectedPyPI{
 			{AffectedBase: osv.AffectedBase{Package: &osv.Package{Name: "alpha", Ecosystem: "PyPI"}}},
 			{AffectedBase: osv.AffectedBase{Package: &osv.Package{Name: "beta", Ecosystem: "PyPI"}}},
 		},
@@ -28,7 +29,7 @@ func TestOSVAffectedRecords_PreservesConcreteType(t *testing.T) {
 	}
 
 	for i, name := range []string{"alpha", "beta"} {
-		aff, ok := got[i].record.OSV.(*osv.AffectedPyPI)
+		aff, ok := got[i].record.OSV.(*ecosystem.AffectedPyPI)
 		if !ok {
 			t.Fatalf("got[%d].OSV type = %T, want *osv.AffectedPyPI", i, got[i].record.OSV)
 		}
@@ -43,15 +44,15 @@ func TestOSVAffectedRecords_PreservesConcreteType(t *testing.T) {
 // address its own copy, not a shared loop var.
 func TestOSVAffectedRecords_ElementsAreDistinct(t *testing.T) {
 	prov := unified.Provenance{Kind: unified.SourceOSV}
-	rec := &osv.RecordPyPI{
-		Affected: []osv.AffectedPyPI{
+	rec := &ecosystem.RecordPyPI{
+		Affected: []ecosystem.AffectedPyPI{
 			{AffectedBase: osv.AffectedBase{Package: &osv.Package{Name: "a"}}},
 			{AffectedBase: osv.AffectedBase{Package: &osv.Package{Name: "b"}}},
 		},
 	}
 	got := OSVAffectedRecords(rec, prov, "osv.PyPI")
-	p0 := got[0].record.OSV.(*osv.AffectedPyPI)
-	p1 := got[1].record.OSV.(*osv.AffectedPyPI)
+	p0 := got[0].record.OSV.(*ecosystem.AffectedPyPI)
+	p1 := got[1].record.OSV.(*ecosystem.AffectedPyPI)
 	if p0 == p1 {
 		t.Fatal("both elements share the same pointer (loop-variable aliasing)")
 	}

@@ -1,32 +1,34 @@
-package osv
+package ecosystem
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
 	"time"
+
+	"github.com/masahiro331/wisteria/internal/unified/osv"
 )
 
 // RecordMaven is one OSV advisory from the Maven ecosystem (typically
 // GHSA-imported).
 
 type RecordMaven struct {
-	Record
+	osv.Record
 	Affected         []AffectedMaven `json:"affected,omitempty"`
 	DatabaseSpecific TopMaven        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordMaven) Base() *Record      { return &r.Record }
+func (r *RecordMaven) Base() *osv.Record  { return &r.Record }
 func (r *RecordMaven) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedMaven struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangeMaven     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoMaven `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBMaven  `json:"database_specific,omitzero"`
 }
 
-type RangeMaven struct{ RangeBase }
+type RangeMaven struct{ osv.RangeBase }
 
 // TopMaven keeps `cwe_ids` non-omitempty because GHSA emits an empty
 // array for advisories with no CWE assigned, and the round-trip
@@ -58,9 +60,9 @@ type MavenMalPackagesOrigin struct {
 }
 
 type MavenMalPackagesRange struct {
-	Events []Event `json:"events,omitempty"`
-	Repo   string  `json:"repo,omitempty"`
-	Type   string  `json:"type,omitempty"`
+	Events []osv.Event `json:"events,omitempty"`
+	Repo   string      `json:"repo,omitempty"`
+	Type   string      `json:"type,omitempty"`
 }
 
 type AffectedEcoMaven struct{}
@@ -148,6 +150,6 @@ func NewRecordMaven(r io.Reader) (*RecordMaven, error) {
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse Maven: %w", err)
 	}
-	rec.Ecosystem = EcosystemMaven
+	rec.Ecosystem = osv.EcosystemMaven
 	return &rec, nil
 }

@@ -1,10 +1,12 @@
-package osv
+package ecosystem
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
 	"time"
+
+	"github.com/masahiro331/wisteria/internal/unified/osv"
 )
 
 // Ecosystems whose database_specific blob carries a free-form
@@ -16,22 +18,22 @@ import (
 // ============================================================
 
 type RecordGeneric struct {
-	Record
+	osv.Record
 	Affected         []AffectedGeneric `json:"affected,omitempty"`
 	DatabaseSpecific TopGeneric        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordGeneric) Base() *Record      { return &r.Record }
+func (r *RecordGeneric) Base() *osv.Record  { return &r.Record }
 func (r *RecordGeneric) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedGeneric struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangeGeneric     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoGeneric `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBGeneric  `json:"database_specific,omitzero"`
 }
 
-type RangeGeneric struct{ RangeBase }
+type RangeGeneric struct{ osv.RangeBase }
 
 type TopGeneric struct {
 	CWE              *GenericCWE     `json:"CWE,omitempty"`
@@ -115,15 +117,15 @@ func (a AffectedDBGeneric) IsZero() bool {
 // UnresolvedRange is the shape upstream uses for `unresolved_ranges` —
 // no `type` field, just an `events` list. Generic-only.
 type UnresolvedRange struct {
-	Events []Event `json:"events,omitempty"`
+	Events []osv.Event `json:"events,omitempty"`
 }
 
 // UnresolvedVersionRange — same as UnresolvedRange but with a `type`
 // field that round-trips even when empty (Generic emits `"type": ""`
 // for unmappable Go module versions).
 type UnresolvedVersionRange struct {
-	Events []Event `json:"events,omitempty"`
-	Type   string  `json:"type"`
+	Events []osv.Event `json:"events,omitempty"`
+	Type   string      `json:"type"`
 }
 
 func NewRecordGeneric(r io.Reader) (*RecordGeneric, error) {
@@ -131,7 +133,7 @@ func NewRecordGeneric(r io.Reader) (*RecordGeneric, error) {
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse Generic: %w", err)
 	}
-	rec.Ecosystem = EcosystemGeneric
+	rec.Ecosystem = osv.EcosystemGeneric
 	return &rec, nil
 }
 
@@ -140,23 +142,23 @@ func NewRecordGeneric(r io.Reader) (*RecordGeneric, error) {
 // ============================================================
 
 type RecordGIT struct {
-	Record
+	osv.Record
 	Affected         []AffectedGIT `json:"affected,omitempty"`
 	DatabaseSpecific TopGIT        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordGIT) Base() *Record      { return &r.Record }
+func (r *RecordGIT) Base() *osv.Record  { return &r.Record }
 func (r *RecordGIT) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedGIT struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangeGIT     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoGIT `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBGIT  `json:"database_specific,omitzero"`
 }
 
 type RangeGIT struct {
-	RangeBase
+	osv.RangeBase
 	DatabaseSpecific RangeDBGIT `json:"database_specific,omitzero"`
 }
 
@@ -201,19 +203,19 @@ type GITMalPackagesOrigin struct {
 }
 
 type GITMalPackagesRange struct {
-	Events []Event `json:"events,omitempty"`
-	Repo   string  `json:"repo,omitempty"`
-	Type   string  `json:"type,omitempty"`
+	Events []osv.Event `json:"events,omitempty"`
+	Repo   string      `json:"repo,omitempty"`
+	Type   string      `json:"type,omitempty"`
 }
 
 // GITUnresolvedRange is the per-CPE block GIT attaches to records the
 // importer could not normalise into a Range — same shape as
 // RangeDBGIT plus an optional events list.
 type GITUnresolvedRange struct {
-	CPE             string  `json:"cpe,omitempty"`
-	Events          []Event `json:"events,omitempty"`
-	ExtractedEvents []Event `json:"extracted_events,omitempty"`
-	Source          string  `json:"source,omitempty"`
+	CPE             string      `json:"cpe,omitempty"`
+	Events          []osv.Event `json:"events,omitempty"`
+	ExtractedEvents []osv.Event `json:"extracted_events,omitempty"`
+	Source          string      `json:"source,omitempty"`
 }
 
 type AffectedEcoGIT struct {
@@ -246,9 +248,9 @@ func (a AffectedDBGIT) IsZero() bool {
 
 type RangeDBGIT struct {
 	CPE             GITRangeCPE `json:"cpe,omitzero"`
-	ExtractedEvents []Event     `json:"extracted_events,omitempty"`
+	ExtractedEvents []osv.Event `json:"extracted_events,omitempty"`
 	Source          string      `json:"source,omitempty"`
-	Versions        []Event     `json:"versions,omitempty"`
+	Versions        []osv.Event `json:"versions,omitempty"`
 }
 
 func (r RangeDBGIT) IsZero() bool {
@@ -306,7 +308,7 @@ func NewRecordGIT(r io.Reader) (*RecordGIT, error) {
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse GIT: %w", err)
 	}
-	rec.Ecosystem = EcosystemGIT
+	rec.Ecosystem = osv.EcosystemGIT
 	return &rec, nil
 }
 
@@ -315,22 +317,22 @@ func NewRecordGIT(r io.Reader) (*RecordGIT, error) {
 // ============================================================
 
 type RecordGo struct {
-	Record
+	osv.Record
 	Affected         []AffectedGo `json:"affected,omitempty"`
 	DatabaseSpecific TopGo        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordGo) Base() *Record      { return &r.Record }
+func (r *RecordGo) Base() *osv.Record  { return &r.Record }
 func (r *RecordGo) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedGo struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangeGo     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoGo `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBGo  `json:"database_specific,omitzero"`
 }
 
-type RangeGo struct{ RangeBase }
+type RangeGo struct{ osv.RangeBase }
 
 type TopGo struct {
 	CWEIDs                   []string              `json:"cwe_ids,omitempty"`
@@ -360,9 +362,9 @@ type GoMalPackagesOrigin struct {
 }
 
 type GoMalPackagesRange struct {
-	Events []Event `json:"events,omitempty"`
-	Repo   string  `json:"repo,omitempty"`
-	Type   string  `json:"type,omitempty"`
+	Events []osv.Event `json:"events,omitempty"`
+	Repo   string      `json:"repo,omitempty"`
+	Type   string      `json:"type,omitempty"`
 }
 
 type AffectedEcoGo struct {
@@ -379,8 +381,8 @@ func (a AffectedEcoGo) IsZero() bool {
 }
 
 type GoCustomRange struct {
-	Events []Event `json:"events,omitempty"`
-	Type   string  `json:"type,omitempty"`
+	Events []osv.Event `json:"events,omitempty"`
+	Type   string      `json:"type,omitempty"`
 }
 
 type GoImport struct {
@@ -403,7 +405,7 @@ func NewRecordGo(r io.Reader) (*RecordGo, error) {
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse Go: %w", err)
 	}
-	rec.Ecosystem = EcosystemGo
+	rec.Ecosystem = osv.EcosystemGo
 	return &rec, nil
 }
 
@@ -412,22 +414,22 @@ func NewRecordGo(r io.Reader) (*RecordGo, error) {
 // ============================================================
 
 type RecordOSSFuzz struct {
-	Record
+	osv.Record
 	Affected         []AffectedOSSFuzz `json:"affected,omitempty"`
 	DatabaseSpecific TopOSSFuzz        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordOSSFuzz) Base() *Record      { return &r.Record }
+func (r *RecordOSSFuzz) Base() *osv.Record  { return &r.Record }
 func (r *RecordOSSFuzz) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedOSSFuzz struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangeOSSFuzz     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoOSSFuzz `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBOSSFuzz  `json:"database_specific,omitzero"`
 }
 
-type RangeOSSFuzz struct{ RangeBase }
+type RangeOSSFuzz struct{ osv.RangeBase }
 
 type TopOSSFuzz struct{}
 
@@ -456,7 +458,7 @@ func NewRecordOSSFuzz(r io.Reader) (*RecordOSSFuzz, error) {
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse OSS-Fuzz: %w", err)
 	}
-	rec.Ecosystem = EcosystemOSSFuzz
+	rec.Ecosystem = osv.EcosystemOSSFuzz
 	return &rec, nil
 }
 
@@ -465,22 +467,22 @@ func NewRecordOSSFuzz(r io.Reader) (*RecordOSSFuzz, error) {
 // ============================================================
 
 type RecordRoot struct {
-	Record
+	osv.Record
 	Affected         []AffectedRoot `json:"affected,omitempty"`
 	DatabaseSpecific TopRoot        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordRoot) Base() *Record      { return &r.Record }
+func (r *RecordRoot) Base() *osv.Record  { return &r.Record }
 func (r *RecordRoot) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedRoot struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangeRoot     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoRoot `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBRoot  `json:"database_specific,omitzero"`
 }
 
-type RangeRoot struct{ RangeBase }
+type RangeRoot struct{ osv.RangeBase }
 
 type TopRoot struct {
 	// All Root fields round-trip with their bare presence even when
@@ -518,7 +520,7 @@ func NewRecordRoot(r io.Reader) (*RecordRoot, error) {
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse Root: %w", err)
 	}
-	rec.Ecosystem = EcosystemRoot
+	rec.Ecosystem = osv.EcosystemRoot
 	return &rec, nil
 }
 
@@ -527,22 +529,22 @@ func NewRecordRoot(r io.Reader) (*RecordRoot, error) {
 // ============================================================
 
 type RecordNpm struct {
-	Record
+	osv.Record
 	Affected         []AffectedNpm `json:"affected,omitempty"`
 	DatabaseSpecific TopNpm        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordNpm) Base() *Record      { return &r.Record }
+func (r *RecordNpm) Base() *osv.Record  { return &r.Record }
 func (r *RecordNpm) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedNpm struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangeNpm     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoNpm `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBNpm  `json:"database_specific,omitzero"`
 }
 
-type RangeNpm struct{ RangeBase }
+type RangeNpm struct{ osv.RangeBase }
 
 type TopNpm struct {
 	CWEIDs                   []string               `json:"cwe_ids"`
@@ -578,9 +580,9 @@ type NpmMalPackagesOrigin struct {
 }
 
 type NpmMalPackagesRange struct {
-	Events []Event `json:"events,omitempty"`
-	Repo   string  `json:"repo,omitempty"`
-	Type   string  `json:"type,omitempty"`
+	Events []osv.Event `json:"events,omitempty"`
+	Repo   string      `json:"repo,omitempty"`
+	Type   string      `json:"type,omitempty"`
 }
 
 type AffectedEcoNpm struct{}
@@ -616,6 +618,6 @@ func NewRecordNpm(r io.Reader) (*RecordNpm, error) {
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse npm: %w", err)
 	}
-	rec.Ecosystem = EcosystemNpm
+	rec.Ecosystem = osv.EcosystemNpm
 	return &rec, nil
 }

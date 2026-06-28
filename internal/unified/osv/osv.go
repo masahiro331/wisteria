@@ -1,21 +1,20 @@
-// Package osv defines parser types for OSV.dev advisory JSON.
+// Package osv defines the shared foundation for OSV.dev advisory JSON:
+// the schema fields every record has in common plus the ecosystem
+// registry.
 //
 // Each upstream ecosystem (PyPI, Ubuntu, Debian, ...) ships its own
-// `database_specific` and `ecosystem_specific` payloads, so the
-// package gives every ecosystem its own concrete `RecordX` struct
-// that embeds the shared `Record` base. The base carries the schema
-// fields that every OSV record has in common (id, aliases, summary,
-// references, ...); the ecosystem-specific bits live as plain Go
-// fields on the wrapping struct so callers see a fully typed shape.
+// `database_specific` and `ecosystem_specific` payloads. This package
+// carries only the parts common to all of them — the `Record` base
+// (id, aliases, summary, references, ...), the shared `AffectedBase` /
+// `RangeBase`, the `Ecosystem` enum + name table, and the `OSVRecord`
+// interface that every concrete record satisfies.
 //
-// To decode a record, callers either:
-//
-//   - use the matching `NewRecord<Eco>(reader)` constructor (returns
-//     the concrete `*RecordPyPI` etc., type-safe at the call site), or
-//   - go through `Parse(eco, reader)` when the ecosystem is only known
-//     dynamically (walker / pipeline path); the result satisfies the
-//     `OSVRecord` interface and a type assertion recovers the concrete
-//     value.
+// The per-ecosystem `RecordX` structs (which embed `Record` and add
+// their typed `database_specific` / `ecosystem_specific`), their
+// `NewRecord<Eco>` constructors, and the dynamic `Parse(eco, reader)`
+// dispatch all live in the sibling `ecosystem` subpackage. That
+// package imports this one; the dependency is one-way (ecosystem →
+// osv) so the base types stay free of the 44-ecosystem tail.
 //
 // Round-trip preservation is the load-bearing invariant: the typed
 // schema must marshal back to JSON semantically equal to the input.
@@ -24,7 +23,6 @@ package osv
 
 import (
 	"fmt"
-	"io"
 	"strings"
 	"time"
 )
@@ -279,87 +277,4 @@ type RangeBase struct {
 type OSVRecord interface {
 	Base() *Record
 	AffectedAny() []any
-}
-
-// affectedAny boxes each element of a per-ecosystem `[]AffectedX`
-// slice as `any`, returning a slice of pointers to independent
-// copies. Concrete `RecordX.AffectedAny` methods delegate here so the
-// boxing logic lives in one place.
-func affectedAny[T any](in []T) []any {
-	out := make([]any, len(in))
-	for i := range in {
-		v := in[i]
-		out[i] = &v
-	}
-	return out
-}
-
-// Parse reads one OSV record from r and returns it as an OSVRecord
-// chosen by eco. The function exists for callers that learn the
-// ecosystem dynamically (walker / pipeline). When the ecosystem is
-// fixed at the call site, prefer the matching `NewRecord<Eco>` —
-// it is type-safe and avoids the assertion on the caller side.
-//
-// Each entry in the dispatch table delegates to the concrete
-// `NewRecord<Eco>` so the parsing logic always lives next to the
-// ecosystem's typed shape, never here.
-func Parse(eco Ecosystem, r io.Reader) (OSVRecord, error) {
-	idx := int(eco)
-	if idx < 0 || idx >= len(parseDispatch) || parseDispatch[idx] == nil {
-		return nil, fmt.Errorf("osv: unknown ecosystem %d", idx)
-	}
-	return parseDispatch[idx](r)
-}
-
-// parseDispatch maps each Ecosystem constant to its concrete
-// `NewRecord*` factory. Indices match the constant block in this file
-// so a missed registration shows up as a nil entry at parse time
-// (Parse hard-errors). New ecosystems must extend both the constant
-// block and this table.
-var parseDispatch = [...]func(io.Reader) (OSVRecord, error){
-	EcosystemAlmaLinux:                  func(r io.Reader) (OSVRecord, error) { return NewRecordAlmaLinux(r) },
-	EcosystemAlpaquita:                  func(r io.Reader) (OSVRecord, error) { return NewRecordAlpaquita(r) },
-	EcosystemAlpine:                     func(r io.Reader) (OSVRecord, error) { return NewRecordAlpine(r) },
-	EcosystemAndroid:                    func(r io.Reader) (OSVRecord, error) { return NewRecordAndroid(r) },
-	EcosystemAzureLinux:                 func(r io.Reader) (OSVRecord, error) { return NewRecordAzureLinux(r) },
-	EcosystemBellSoftHardenedContainers: func(r io.Reader) (OSVRecord, error) { return NewRecordBellSoftHardenedContainers(r) },
-	EcosystemBitnami:                    func(r io.Reader) (OSVRecord, error) { return NewRecordBitnami(r) },
-	EcosystemCRAN:                       func(r io.Reader) (OSVRecord, error) { return NewRecordCRAN(r) },
-	EcosystemChainguard:                 func(r io.Reader) (OSVRecord, error) { return NewRecordChainguard(r) },
-	EcosystemCleanStart:                 func(r io.Reader) (OSVRecord, error) { return NewRecordCleanStart(r) },
-	EcosystemCratesIO:                   func(r io.Reader) (OSVRecord, error) { return NewRecordCratesIO(r) },
-	EcosystemDebian:                     func(r io.Reader) (OSVRecord, error) { return NewRecordDebian(r) },
-	EcosystemEcho:                       func(r io.Reader) (OSVRecord, error) { return NewRecordEcho(r) },
-	EcosystemGHC:                        func(r io.Reader) (OSVRecord, error) { return NewRecordGHC(r) },
-	EcosystemGIT:                        func(r io.Reader) (OSVRecord, error) { return NewRecordGIT(r) },
-	EcosystemGSD:                        func(r io.Reader) (OSVRecord, error) { return NewRecordGSD(r) },
-	EcosystemGeneric:                    func(r io.Reader) (OSVRecord, error) { return NewRecordGeneric(r) },
-	EcosystemGitHubActions:              func(r io.Reader) (OSVRecord, error) { return NewRecordGitHubActions(r) },
-	EcosystemGo:                         func(r io.Reader) (OSVRecord, error) { return NewRecordGo(r) },
-	EcosystemHackage:                    func(r io.Reader) (OSVRecord, error) { return NewRecordHackage(r) },
-	EcosystemHex:                        func(r io.Reader) (OSVRecord, error) { return NewRecordHex(r) },
-	EcosystemJulia:                      func(r io.Reader) (OSVRecord, error) { return NewRecordJulia(r) },
-	EcosystemLinux:                      func(r io.Reader) (OSVRecord, error) { return NewRecordLinux(r) },
-	EcosystemMageia:                     func(r io.Reader) (OSVRecord, error) { return NewRecordMageia(r) },
-	EcosystemMaven:                      func(r io.Reader) (OSVRecord, error) { return NewRecordMaven(r) },
-	EcosystemMinimOS:                    func(r io.Reader) (OSVRecord, error) { return NewRecordMinimOS(r) },
-	EcosystemNuGet:                      func(r io.Reader) (OSVRecord, error) { return NewRecordNuGet(r) },
-	EcosystemOSSFuzz:                    func(r io.Reader) (OSVRecord, error) { return NewRecordOSSFuzz(r) },
-	EcosystemPackagist:                  func(r io.Reader) (OSVRecord, error) { return NewRecordPackagist(r) },
-	EcosystemPub:                        func(r io.Reader) (OSVRecord, error) { return NewRecordPub(r) },
-	EcosystemPyPI:                       func(r io.Reader) (OSVRecord, error) { return NewRecordPyPI(r) },
-	EcosystemRedHat:                     func(r io.Reader) (OSVRecord, error) { return NewRecordRedHat(r) },
-	EcosystemRockyLinux:                 func(r io.Reader) (OSVRecord, error) { return NewRecordRockyLinux(r) },
-	EcosystemRoot:                       func(r io.Reader) (OSVRecord, error) { return NewRecordRoot(r) },
-	EcosystemRubyGems:                   func(r io.Reader) (OSVRecord, error) { return NewRecordRubyGems(r) },
-	EcosystemSUSE:                       func(r io.Reader) (OSVRecord, error) { return NewRecordSUSE(r) },
-	EcosystemSwiftURL:                   func(r io.Reader) (OSVRecord, error) { return NewRecordSwiftURL(r) },
-	EcosystemUVI:                        func(r io.Reader) (OSVRecord, error) { return NewRecordUVI(r) },
-	EcosystemUbuntu:                     func(r io.Reader) (OSVRecord, error) { return NewRecordUbuntu(r) },
-	EcosystemVSCode:                     func(r io.Reader) (OSVRecord, error) { return NewRecordVSCode(r) },
-	EcosystemWolfi:                      func(r io.Reader) (OSVRecord, error) { return NewRecordWolfi(r) },
-	EcosystemNpm:                        func(r io.Reader) (OSVRecord, error) { return NewRecordNpm(r) },
-	EcosystemOpam:                       func(r io.Reader) (OSVRecord, error) { return NewRecordOpam(r) },
-	EcosystemOpenEuler:                  func(r io.Reader) (OSVRecord, error) { return NewRecordOpenEuler(r) },
-	EcosystemOpenSUSE:                   func(r io.Reader) (OSVRecord, error) { return NewRecordOpenSUSE(r) },
 }

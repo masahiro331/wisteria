@@ -50,6 +50,7 @@ import (
 	"github.com/masahiro331/wisteria/internal/unified/cve"
 	"github.com/masahiro331/wisteria/internal/unified/kev"
 	"github.com/masahiro331/wisteria/internal/unified/osv"
+	"github.com/masahiro331/wisteria/internal/unified/osv/ecosystem"
 )
 
 func main() {
@@ -92,7 +93,7 @@ func checkOSV(root string, perEco int, c *counter) {
 		files := sample(filepath.Join(osvRoot, e.Name()), perEco, ".json")
 		for _, p := range files {
 			diffOne(p, c, func(b []byte) (any, error) {
-				return osv.Parse(eco, bytes.NewReader(b))
+				return ecosystem.Parse(eco, bytes.NewReader(b))
 			})
 		}
 	}

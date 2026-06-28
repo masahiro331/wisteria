@@ -1,10 +1,12 @@
-package osv
+package ecosystem
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
 	"time"
+
+	"github.com/masahiro331/wisteria/internal/unified/osv"
 )
 
 // RecordPyPI is one OSV advisory from the PyPI ecosystem.
@@ -15,13 +17,13 @@ import (
 // `DatabaseSpecific TopPyPI` types the record-level GHSA / malicious-
 // packages payload that osv.dev attaches under `database_specific`.
 type RecordPyPI struct {
-	Record
+	osv.Record
 	Affected         []AffectedPyPI `json:"affected,omitempty"`
 	DatabaseSpecific TopPyPI        `json:"database_specific,omitzero"`
 }
 
 // Base satisfies OSVRecord by exposing the embedded common fields.
-func (r *RecordPyPI) Base() *Record      { return &r.Record }
+func (r *RecordPyPI) Base() *osv.Record  { return &r.Record }
 func (r *RecordPyPI) AffectedAny() []any { return affectedAny(r.Affected) }
 
 // AffectedPyPI is the PyPI shape of `affected[]`. EcosystemSpecific is
@@ -30,7 +32,7 @@ func (r *RecordPyPI) AffectedAny() []any { return affectedAny(r.Affected) }
 // imports), DatabaseSpecific is `affected[].database_specific` and
 // Ranges carries PyPI ranges (database_specific is empty for PyPI).
 type AffectedPyPI struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangePyPI     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoPyPI `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBPyPI  `json:"database_specific,omitzero"`
@@ -41,7 +43,7 @@ type AffectedPyPI struct {
 // nothing beyond the base — but we still declare it so the wrapper
 // type can grow without touching every affected user later.
 type RangePyPI struct {
-	RangeBase
+	osv.RangeBase
 }
 
 // TopPyPI is `database_specific` at the record root for PyPI
@@ -85,9 +87,9 @@ type PyPIMalPackagesOrigin struct {
 // origin record — same shape as the OSV core Range but lives on a
 // different parent so we keep it local to the ecosystem.
 type PyPIMalPackagesRange struct {
-	Events []Event `json:"events,omitempty"`
-	Repo   string  `json:"repo,omitempty"`
-	Type   string  `json:"type,omitempty"`
+	Events []osv.Event `json:"events,omitempty"`
+	Repo   string      `json:"repo,omitempty"`
+	Type   string      `json:"type,omitempty"`
 }
 
 // AffectedEcoPyPI is `affected[].ecosystem_specific` for PyPI.
@@ -102,7 +104,7 @@ type AffectedEcoPyPI struct {
 // custom Unmarshal/Marshal pair preserves whichever form upstream
 // emitted so a round-trip never silently rewrites the document.
 type PyPIEcoSeverity struct {
-	Items []Severity
+	Items []osv.Severity
 	Label string
 }
 
@@ -135,7 +137,7 @@ func (s *PyPIEcoSeverity) UnmarshalJSON(b []byte) error {
 		*s = PyPIEcoSeverity{Label: v}
 		return nil
 	case '[':
-		var v []Severity
+		var v []osv.Severity
 		if err := json.Unmarshal(b, &v); err != nil {
 			return err
 		}
@@ -169,6 +171,6 @@ func NewRecordPyPI(r io.Reader) (*RecordPyPI, error) {
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse PyPI: %w", err)
 	}
-	rec.Ecosystem = EcosystemPyPI
+	rec.Ecosystem = osv.EcosystemPyPI
 	return &rec, nil
 }

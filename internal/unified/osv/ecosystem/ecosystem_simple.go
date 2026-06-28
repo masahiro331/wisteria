@@ -1,9 +1,11 @@
-package osv
+package ecosystem
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
+
+	"github.com/masahiro331/wisteria/internal/unified/osv"
 )
 
 // This file groups ecosystems whose database_specific /
@@ -20,23 +22,23 @@ import (
 // ============================================================
 
 type RecordAlmaLinux struct {
-	Record
+	osv.Record
 	Affected         []AffectedAlmaLinux `json:"affected,omitempty"`
 	DatabaseSpecific TopAlmaLinux        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordAlmaLinux) Base() *Record      { return &r.Record }
+func (r *RecordAlmaLinux) Base() *osv.Record  { return &r.Record }
 func (r *RecordAlmaLinux) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedAlmaLinux struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangeAlmaLinux     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoAlmaLinux `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBAlmaLinux  `json:"database_specific,omitzero"`
 }
 
 type RangeAlmaLinux struct {
-	RangeBase
+	osv.RangeBase
 }
 
 type TopAlmaLinux struct{}
@@ -58,7 +60,7 @@ func NewRecordAlmaLinux(r io.Reader) (*RecordAlmaLinux, error) {
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse AlmaLinux: %w", err)
 	}
-	rec.Ecosystem = EcosystemAlmaLinux
+	rec.Ecosystem = osv.EcosystemAlmaLinux
 	return &rec, nil
 }
 
@@ -67,22 +69,22 @@ func NewRecordAlmaLinux(r io.Reader) (*RecordAlmaLinux, error) {
 // ============================================================
 
 type RecordAlpaquita struct {
-	Record
+	osv.Record
 	Affected         []AffectedAlpaquita `json:"affected,omitempty"`
 	DatabaseSpecific TopAlpaquita        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordAlpaquita) Base() *Record      { return &r.Record }
+func (r *RecordAlpaquita) Base() *osv.Record  { return &r.Record }
 func (r *RecordAlpaquita) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedAlpaquita struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangeAlpaquita     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoAlpaquita `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBAlpaquita  `json:"database_specific,omitzero"`
 }
 
-type RangeAlpaquita struct{ RangeBase }
+type RangeAlpaquita struct{ osv.RangeBase }
 
 type TopAlpaquita struct{}
 
@@ -103,7 +105,7 @@ func NewRecordAlpaquita(r io.Reader) (*RecordAlpaquita, error) {
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse Alpaquita: %w", err)
 	}
-	rec.Ecosystem = EcosystemAlpaquita
+	rec.Ecosystem = osv.EcosystemAlpaquita
 	return &rec, nil
 }
 
@@ -112,22 +114,22 @@ func NewRecordAlpaquita(r io.Reader) (*RecordAlpaquita, error) {
 // ============================================================
 
 type RecordAlpine struct {
-	Record
+	osv.Record
 	Affected         []AffectedAlpine `json:"affected,omitempty"`
 	DatabaseSpecific TopAlpine        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordAlpine) Base() *Record      { return &r.Record }
+func (r *RecordAlpine) Base() *osv.Record  { return &r.Record }
 func (r *RecordAlpine) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedAlpine struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangeAlpine     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoAlpine `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBAlpine  `json:"database_specific,omitzero"`
 }
 
-type RangeAlpine struct{ RangeBase }
+type RangeAlpine struct{ osv.RangeBase }
 
 type TopAlpine struct{}
 
@@ -148,7 +150,7 @@ func NewRecordAlpine(r io.Reader) (*RecordAlpine, error) {
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse Alpine: %w", err)
 	}
-	rec.Ecosystem = EcosystemAlpine
+	rec.Ecosystem = osv.EcosystemAlpine
 	return &rec, nil
 }
 
@@ -157,22 +159,22 @@ func NewRecordAlpine(r io.Reader) (*RecordAlpine, error) {
 // ============================================================
 
 type RecordAzureLinux struct {
-	Record
+	osv.Record
 	Affected         []AffectedAzureLinux `json:"affected,omitempty"`
 	DatabaseSpecific TopAzureLinux        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordAzureLinux) Base() *Record      { return &r.Record }
+func (r *RecordAzureLinux) Base() *osv.Record  { return &r.Record }
 func (r *RecordAzureLinux) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedAzureLinux struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangeAzureLinux     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoAzureLinux `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBAzureLinux  `json:"database_specific,omitzero"`
 }
 
-type RangeAzureLinux struct{ RangeBase }
+type RangeAzureLinux struct{ osv.RangeBase }
 
 type TopAzureLinux struct{}
 
@@ -193,7 +195,7 @@ func NewRecordAzureLinux(r io.Reader) (*RecordAzureLinux, error) {
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse AzureLinux: %w", err)
 	}
-	rec.Ecosystem = EcosystemAzureLinux
+	rec.Ecosystem = osv.EcosystemAzureLinux
 	return &rec, nil
 }
 
@@ -202,22 +204,22 @@ func NewRecordAzureLinux(r io.Reader) (*RecordAzureLinux, error) {
 // ============================================================
 
 type RecordBellSoftHardenedContainers struct {
-	Record
+	osv.Record
 	Affected         []AffectedBellSoftHardenedContainers `json:"affected,omitempty"`
 	DatabaseSpecific TopBellSoftHardenedContainers        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordBellSoftHardenedContainers) Base() *Record      { return &r.Record }
+func (r *RecordBellSoftHardenedContainers) Base() *osv.Record  { return &r.Record }
 func (r *RecordBellSoftHardenedContainers) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedBellSoftHardenedContainers struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangeBellSoftHardenedContainers     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoBellSoftHardenedContainers `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBBellSoftHardenedContainers  `json:"database_specific,omitzero"`
 }
 
-type RangeBellSoftHardenedContainers struct{ RangeBase }
+type RangeBellSoftHardenedContainers struct{ osv.RangeBase }
 
 type TopBellSoftHardenedContainers struct{}
 
@@ -240,7 +242,7 @@ func NewRecordBellSoftHardenedContainers(r io.Reader) (*RecordBellSoftHardenedCo
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse BellSoftHardenedContainers: %w", err)
 	}
-	rec.Ecosystem = EcosystemBellSoftHardenedContainers
+	rec.Ecosystem = osv.EcosystemBellSoftHardenedContainers
 	return &rec, nil
 }
 
@@ -249,22 +251,22 @@ func NewRecordBellSoftHardenedContainers(r io.Reader) (*RecordBellSoftHardenedCo
 // ============================================================
 
 type RecordCRAN struct {
-	Record
+	osv.Record
 	Affected         []AffectedCRAN `json:"affected,omitempty"`
 	DatabaseSpecific TopCRAN        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordCRAN) Base() *Record      { return &r.Record }
+func (r *RecordCRAN) Base() *osv.Record  { return &r.Record }
 func (r *RecordCRAN) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedCRAN struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangeCRAN     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoCRAN `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBCRAN  `json:"database_specific,omitzero"`
 }
 
-type RangeCRAN struct{ RangeBase }
+type RangeCRAN struct{ osv.RangeBase }
 
 type TopCRAN struct{}
 
@@ -285,7 +287,7 @@ func NewRecordCRAN(r io.Reader) (*RecordCRAN, error) {
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse CRAN: %w", err)
 	}
-	rec.Ecosystem = EcosystemCRAN
+	rec.Ecosystem = osv.EcosystemCRAN
 	return &rec, nil
 }
 
@@ -294,22 +296,22 @@ func NewRecordCRAN(r io.Reader) (*RecordCRAN, error) {
 // ============================================================
 
 type RecordCleanStart struct {
-	Record
+	osv.Record
 	Affected         []AffectedCleanStart `json:"affected,omitempty"`
 	DatabaseSpecific TopCleanStart        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordCleanStart) Base() *Record      { return &r.Record }
+func (r *RecordCleanStart) Base() *osv.Record  { return &r.Record }
 func (r *RecordCleanStart) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedCleanStart struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangeCleanStart     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoCleanStart `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBCleanStart  `json:"database_specific,omitzero"`
 }
 
-type RangeCleanStart struct{ RangeBase }
+type RangeCleanStart struct{ osv.RangeBase }
 
 type TopCleanStart struct{}
 
@@ -330,7 +332,7 @@ func NewRecordCleanStart(r io.Reader) (*RecordCleanStart, error) {
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse CleanStart: %w", err)
 	}
-	rec.Ecosystem = EcosystemCleanStart
+	rec.Ecosystem = osv.EcosystemCleanStart
 	return &rec, nil
 }
 
@@ -339,22 +341,22 @@ func NewRecordCleanStart(r io.Reader) (*RecordCleanStart, error) {
 // ============================================================
 
 type RecordEcho struct {
-	Record
+	osv.Record
 	Affected         []AffectedEcho `json:"affected,omitempty"`
 	DatabaseSpecific TopEcho        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordEcho) Base() *Record      { return &r.Record }
+func (r *RecordEcho) Base() *osv.Record  { return &r.Record }
 func (r *RecordEcho) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedEcho struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangeEcho     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoEcho `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBEcho  `json:"database_specific,omitzero"`
 }
 
-type RangeEcho struct{ RangeBase }
+type RangeEcho struct{ osv.RangeBase }
 
 type TopEcho struct{}
 
@@ -375,7 +377,7 @@ func NewRecordEcho(r io.Reader) (*RecordEcho, error) {
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse Echo: %w", err)
 	}
-	rec.Ecosystem = EcosystemEcho
+	rec.Ecosystem = osv.EcosystemEcho
 	return &rec, nil
 }
 
@@ -384,22 +386,22 @@ func NewRecordEcho(r io.Reader) (*RecordEcho, error) {
 // ============================================================
 
 type RecordGSD struct {
-	Record
+	osv.Record
 	Affected         []AffectedGSD `json:"affected,omitempty"`
 	DatabaseSpecific TopGSD        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordGSD) Base() *Record      { return &r.Record }
+func (r *RecordGSD) Base() *osv.Record  { return &r.Record }
 func (r *RecordGSD) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedGSD struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangeGSD     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoGSD `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBGSD  `json:"database_specific,omitzero"`
 }
 
-type RangeGSD struct{ RangeBase }
+type RangeGSD struct{ osv.RangeBase }
 
 type TopGSD struct{}
 
@@ -420,7 +422,7 @@ func NewRecordGSD(r io.Reader) (*RecordGSD, error) {
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse GSD: %w", err)
 	}
-	rec.Ecosystem = EcosystemGSD
+	rec.Ecosystem = osv.EcosystemGSD
 	return &rec, nil
 }
 
@@ -429,22 +431,22 @@ func NewRecordGSD(r io.Reader) (*RecordGSD, error) {
 // ============================================================
 
 type RecordRedHat struct {
-	Record
+	osv.Record
 	Affected         []AffectedRedHat `json:"affected,omitempty"`
 	DatabaseSpecific TopRedHat        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordRedHat) Base() *Record      { return &r.Record }
+func (r *RecordRedHat) Base() *osv.Record  { return &r.Record }
 func (r *RecordRedHat) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedRedHat struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangeRedHat     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoRedHat `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBRedHat  `json:"database_specific,omitzero"`
 }
 
-type RangeRedHat struct{ RangeBase }
+type RangeRedHat struct{ osv.RangeBase }
 
 type TopRedHat struct{}
 
@@ -465,7 +467,7 @@ func NewRecordRedHat(r io.Reader) (*RecordRedHat, error) {
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse RedHat: %w", err)
 	}
-	rec.Ecosystem = EcosystemRedHat
+	rec.Ecosystem = osv.EcosystemRedHat
 	return &rec, nil
 }
 
@@ -474,22 +476,22 @@ func NewRecordRedHat(r io.Reader) (*RecordRedHat, error) {
 // ============================================================
 
 type RecordUVI struct {
-	Record
+	osv.Record
 	Affected         []AffectedUVI `json:"affected,omitempty"`
 	DatabaseSpecific TopUVI        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordUVI) Base() *Record      { return &r.Record }
+func (r *RecordUVI) Base() *osv.Record  { return &r.Record }
 func (r *RecordUVI) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedUVI struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangeUVI     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoUVI `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBUVI  `json:"database_specific,omitzero"`
 }
 
-type RangeUVI struct{ RangeBase }
+type RangeUVI struct{ osv.RangeBase }
 
 type TopUVI struct{}
 
@@ -510,6 +512,6 @@ func NewRecordUVI(r io.Reader) (*RecordUVI, error) {
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse UVI: %w", err)
 	}
-	rec.Ecosystem = EcosystemUVI
+	rec.Ecosystem = osv.EcosystemUVI
 	return &rec, nil
 }

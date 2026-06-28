@@ -28,6 +28,7 @@ import (
 	"github.com/masahiro331/wisteria/internal/unified"
 	"github.com/masahiro331/wisteria/internal/unified/cve"
 	"github.com/masahiro331/wisteria/internal/unified/osv"
+	"github.com/masahiro331/wisteria/internal/unified/osv/ecosystem"
 )
 
 // MergePrimary parses each IndexEntry under primaryID and applies the
@@ -141,7 +142,7 @@ func readOSV(path, ecoName string) (osv.OSVRecord, error) {
 		return nil, err
 	}
 	defer f.Close()
-	return osv.Parse(eco, f)
+	return ecosystem.Parse(eco, f)
 }
 
 func readCVE(path string) (cve.Record, error) {

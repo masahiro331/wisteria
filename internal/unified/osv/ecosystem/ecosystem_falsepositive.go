@@ -1,9 +1,11 @@
-package osv
+package ecosystem
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
+
+	"github.com/masahiro331/wisteria/internal/unified/osv"
 )
 
 // Ecosystems whose only distinguishing payload is a `false_positive`
@@ -15,23 +17,23 @@ import (
 // ============================================================
 
 type RecordChainguard struct {
-	Record
+	osv.Record
 	Affected         []AffectedChainguard `json:"affected,omitempty"`
 	DatabaseSpecific TopChainguard        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordChainguard) Base() *Record      { return &r.Record }
+func (r *RecordChainguard) Base() *osv.Record  { return &r.Record }
 func (r *RecordChainguard) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedChainguard struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangeChainguard     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoChainguard `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBChainguard  `json:"database_specific,omitzero"`
 }
 
 type RangeChainguard struct {
-	RangeBase
+	osv.RangeBase
 	DatabaseSpecific RangeDBChainguard `json:"database_specific,omitzero"`
 }
 
@@ -60,7 +62,7 @@ func NewRecordChainguard(r io.Reader) (*RecordChainguard, error) {
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse Chainguard: %w", err)
 	}
-	rec.Ecosystem = EcosystemChainguard
+	rec.Ecosystem = osv.EcosystemChainguard
 	return &rec, nil
 }
 
@@ -69,23 +71,23 @@ func NewRecordChainguard(r io.Reader) (*RecordChainguard, error) {
 // ============================================================
 
 type RecordWolfi struct {
-	Record
+	osv.Record
 	Affected         []AffectedWolfi `json:"affected,omitempty"`
 	DatabaseSpecific TopWolfi        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordWolfi) Base() *Record      { return &r.Record }
+func (r *RecordWolfi) Base() *osv.Record  { return &r.Record }
 func (r *RecordWolfi) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedWolfi struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangeWolfi     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoWolfi `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBWolfi  `json:"database_specific,omitzero"`
 }
 
 type RangeWolfi struct {
-	RangeBase
+	osv.RangeBase
 	DatabaseSpecific RangeDBWolfi `json:"database_specific,omitzero"`
 }
 
@@ -114,7 +116,7 @@ func NewRecordWolfi(r io.Reader) (*RecordWolfi, error) {
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse Wolfi: %w", err)
 	}
-	rec.Ecosystem = EcosystemWolfi
+	rec.Ecosystem = osv.EcosystemWolfi
 	return &rec, nil
 }
 
@@ -123,23 +125,23 @@ func NewRecordWolfi(r io.Reader) (*RecordWolfi, error) {
 // ============================================================
 
 type RecordMinimOS struct {
-	Record
+	osv.Record
 	Affected         []AffectedMinimOS `json:"affected,omitempty"`
 	DatabaseSpecific TopMinimOS        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordMinimOS) Base() *Record      { return &r.Record }
+func (r *RecordMinimOS) Base() *osv.Record  { return &r.Record }
 func (r *RecordMinimOS) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedMinimOS struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangeMinimOS     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoMinimOS `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBMinimOS  `json:"database_specific,omitzero"`
 }
 
 type RangeMinimOS struct {
-	RangeBase
+	osv.RangeBase
 	DatabaseSpecific RangeDBMinimOS `json:"database_specific,omitzero"`
 }
 
@@ -168,7 +170,7 @@ func NewRecordMinimOS(r io.Reader) (*RecordMinimOS, error) {
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse MinimOS: %w", err)
 	}
-	rec.Ecosystem = EcosystemMinimOS
+	rec.Ecosystem = osv.EcosystemMinimOS
 	return &rec, nil
 }
 
@@ -177,23 +179,23 @@ func NewRecordMinimOS(r io.Reader) (*RecordMinimOS, error) {
 // ============================================================
 
 type RecordRockyLinux struct {
-	Record
+	osv.Record
 	Affected         []AffectedRockyLinux `json:"affected,omitempty"`
 	DatabaseSpecific TopRockyLinux        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordRockyLinux) Base() *Record      { return &r.Record }
+func (r *RecordRockyLinux) Base() *osv.Record  { return &r.Record }
 func (r *RecordRockyLinux) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedRockyLinux struct {
-	AffectedBase
+	osv.AffectedBase
 	Ranges            []RangeRockyLinux     `json:"ranges,omitempty"`
 	EcosystemSpecific AffectedEcoRockyLinux `json:"ecosystem_specific,omitzero"`
 	DatabaseSpecific  AffectedDBRockyLinux  `json:"database_specific,omitzero"`
 }
 
 type RangeRockyLinux struct {
-	RangeBase
+	osv.RangeBase
 	DatabaseSpecific RangeDBRockyLinux `json:"database_specific,omitzero"`
 }
 
@@ -224,6 +226,6 @@ func NewRecordRockyLinux(r io.Reader) (*RecordRockyLinux, error) {
 	if err := json.NewDecoder(r).Decode(&rec); err != nil {
 		return nil, fmt.Errorf("osv: parse RockyLinux: %w", err)
 	}
-	rec.Ecosystem = EcosystemRockyLinux
+	rec.Ecosystem = osv.EcosystemRockyLinux
 	return &rec, nil
 }
