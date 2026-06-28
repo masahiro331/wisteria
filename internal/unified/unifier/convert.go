@@ -132,14 +132,28 @@ func CVEDescriptions(in []cve.Description, from unified.Provenance) []descriptio
 	return out
 }
 
-// OSVAffectedRecords wraps each osv.Affected as an AffectedRecord with
-// the source-side substructure preserved (no field-by-field copy).
-func OSVAffectedRecords(in []osv.Affected, from unified.Provenance, source string) []affectedItem {
-	out := make([]affectedItem, 0, len(in))
-	for i := range in {
-		aff := in[i] // copy so the &aff escape doesn't share the loop var
+// OSVAffectedRecords flattens the per-ecosystem `RecordX.Affected`
+// slice into one affectedItem per entry, wrapping each in the
+// shared `unified.AffectedRecord` shape. The OSV affected is stored
+// as `any` because each ecosystem has its own concrete
+// `AffectedX` struct; downstream consumers recover the concrete type
+// via `From.Source` (the OSV ecosystem dir name) when they need
+// ecosystem-specific fields.
+//
+// The per-ecosystem Affected slice is obtained through the
+// `OSVRecord.AffectedAny` method, so adding a new ecosystem is a
+// compile-time-checked obligation (a record type that forgets the
+// method fails to satisfy the interface) rather than a silently
+// skipped entry in a reflection table.
+func OSVAffectedRecords(rec osv.OSVRecord, from unified.Provenance, source string) []affectedItem {
+	if rec == nil {
+		return nil
+	}
+	affs := rec.AffectedAny()
+	out := make([]affectedItem, 0, len(affs))
+	for _, a := range affs {
 		out = append(out, affectedItem{
-			record: unified.AffectedRecord{From: from, OSV: &aff},
+			record: unified.AffectedRecord{From: from, OSV: a},
 			source: source,
 		})
 	}

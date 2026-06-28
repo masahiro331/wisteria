@@ -11,7 +11,6 @@ package unified
 
 import (
 	"github.com/masahiro331/wisteria/internal/unified/cve"
-	"github.com/masahiro331/wisteria/internal/unified/osv"
 )
 
 // SourceKind identifies which upstream catalog a record came from.
@@ -74,9 +73,13 @@ type Severity struct {
 // We do not try to reconcile OSV ranges against CVE5 platform/version
 // shapes here — the typed source struct is preserved so downstream stages
 // (Phase 2 / Phase 3) can decide.
+//
+// OSV is `any` because each ecosystem has its own concrete `osv.AffectedX`
+// type; downstream consumers type-switch on the wrapping `Provenance`'s
+// Source to recover the concrete shape.
 type AffectedRecord struct {
 	From Provenance    `json:"from"`
-	OSV  *osv.Affected `json:"osv,omitempty"`
+	OSV  any           `json:"osv,omitempty"`
 	CVE  *cve.Affected `json:"cve,omitempty"`
 }
 
