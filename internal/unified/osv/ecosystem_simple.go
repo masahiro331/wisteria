@@ -25,7 +25,8 @@ type RecordAlmaLinux struct {
 	DatabaseSpecific TopAlmaLinux        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordAlmaLinux) Base() *Record { return &r.Record }
+func (r *RecordAlmaLinux) Base() *Record      { return &r.Record }
+func (r *RecordAlmaLinux) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedAlmaLinux struct {
 	AffectedBase
@@ -71,7 +72,8 @@ type RecordAlpaquita struct {
 	DatabaseSpecific TopAlpaquita        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordAlpaquita) Base() *Record { return &r.Record }
+func (r *RecordAlpaquita) Base() *Record      { return &r.Record }
+func (r *RecordAlpaquita) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedAlpaquita struct {
 	AffectedBase
@@ -115,7 +117,8 @@ type RecordAlpine struct {
 	DatabaseSpecific TopAlpine        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordAlpine) Base() *Record { return &r.Record }
+func (r *RecordAlpine) Base() *Record      { return &r.Record }
+func (r *RecordAlpine) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedAlpine struct {
 	AffectedBase
@@ -159,7 +162,8 @@ type RecordAzureLinux struct {
 	DatabaseSpecific TopAzureLinux        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordAzureLinux) Base() *Record { return &r.Record }
+func (r *RecordAzureLinux) Base() *Record      { return &r.Record }
+func (r *RecordAzureLinux) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedAzureLinux struct {
 	AffectedBase
@@ -203,7 +207,8 @@ type RecordBellSoftHardenedContainers struct {
 	DatabaseSpecific TopBellSoftHardenedContainers        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordBellSoftHardenedContainers) Base() *Record { return &r.Record }
+func (r *RecordBellSoftHardenedContainers) Base() *Record      { return &r.Record }
+func (r *RecordBellSoftHardenedContainers) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedBellSoftHardenedContainers struct {
 	AffectedBase
@@ -249,7 +254,8 @@ type RecordCRAN struct {
 	DatabaseSpecific TopCRAN        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordCRAN) Base() *Record { return &r.Record }
+func (r *RecordCRAN) Base() *Record      { return &r.Record }
+func (r *RecordCRAN) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedCRAN struct {
 	AffectedBase
@@ -293,7 +299,8 @@ type RecordCleanStart struct {
 	DatabaseSpecific TopCleanStart        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordCleanStart) Base() *Record { return &r.Record }
+func (r *RecordCleanStart) Base() *Record      { return &r.Record }
+func (r *RecordCleanStart) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedCleanStart struct {
 	AffectedBase
@@ -337,7 +344,8 @@ type RecordEcho struct {
 	DatabaseSpecific TopEcho        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordEcho) Base() *Record { return &r.Record }
+func (r *RecordEcho) Base() *Record      { return &r.Record }
+func (r *RecordEcho) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedEcho struct {
 	AffectedBase
@@ -381,7 +389,8 @@ type RecordGSD struct {
 	DatabaseSpecific TopGSD        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordGSD) Base() *Record { return &r.Record }
+func (r *RecordGSD) Base() *Record      { return &r.Record }
+func (r *RecordGSD) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedGSD struct {
 	AffectedBase
@@ -425,7 +434,8 @@ type RecordRedHat struct {
 	DatabaseSpecific TopRedHat        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordRedHat) Base() *Record { return &r.Record }
+func (r *RecordRedHat) Base() *Record      { return &r.Record }
+func (r *RecordRedHat) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedRedHat struct {
 	AffectedBase
@@ -469,7 +479,8 @@ type RecordUVI struct {
 	DatabaseSpecific TopUVI        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordUVI) Base() *Record { return &r.Record }
+func (r *RecordUVI) Base() *Record      { return &r.Record }
+func (r *RecordUVI) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedUVI struct {
 	AffectedBase

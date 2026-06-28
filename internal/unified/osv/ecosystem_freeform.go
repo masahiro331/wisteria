@@ -21,7 +21,8 @@ type RecordGeneric struct {
 	DatabaseSpecific TopGeneric        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordGeneric) Base() *Record { return &r.Record }
+func (r *RecordGeneric) Base() *Record      { return &r.Record }
+func (r *RecordGeneric) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedGeneric struct {
 	AffectedBase
@@ -144,7 +145,8 @@ type RecordGIT struct {
 	DatabaseSpecific TopGIT        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordGIT) Base() *Record { return &r.Record }
+func (r *RecordGIT) Base() *Record      { return &r.Record }
+func (r *RecordGIT) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedGIT struct {
 	AffectedBase
@@ -318,7 +320,8 @@ type RecordGo struct {
 	DatabaseSpecific TopGo        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordGo) Base() *Record { return &r.Record }
+func (r *RecordGo) Base() *Record      { return &r.Record }
+func (r *RecordGo) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedGo struct {
 	AffectedBase
@@ -414,7 +417,8 @@ type RecordOSSFuzz struct {
 	DatabaseSpecific TopOSSFuzz        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordOSSFuzz) Base() *Record { return &r.Record }
+func (r *RecordOSSFuzz) Base() *Record      { return &r.Record }
+func (r *RecordOSSFuzz) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedOSSFuzz struct {
 	AffectedBase
@@ -466,7 +470,8 @@ type RecordRoot struct {
 	DatabaseSpecific TopRoot        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordRoot) Base() *Record { return &r.Record }
+func (r *RecordRoot) Base() *Record      { return &r.Record }
+func (r *RecordRoot) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedRoot struct {
 	AffectedBase
@@ -527,7 +532,8 @@ type RecordNpm struct {
 	DatabaseSpecific TopNpm        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordNpm) Base() *Record { return &r.Record }
+func (r *RecordNpm) Base() *Record      { return &r.Record }
+func (r *RecordNpm) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedNpm struct {
 	AffectedBase

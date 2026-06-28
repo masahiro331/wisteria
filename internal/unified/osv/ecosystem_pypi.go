@@ -21,7 +21,8 @@ type RecordPyPI struct {
 }
 
 // Base satisfies OSVRecord by exposing the embedded common fields.
-func (r *RecordPyPI) Base() *Record { return &r.Record }
+func (r *RecordPyPI) Base() *Record      { return &r.Record }
+func (r *RecordPyPI) AffectedAny() []any { return affectedAny(r.Affected) }
 
 // AffectedPyPI is the PyPI shape of `affected[]`. EcosystemSpecific is
 // the per-affected `ecosystem_specific` block (CVSS array or label

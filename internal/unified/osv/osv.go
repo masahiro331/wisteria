@@ -269,8 +269,29 @@ type RangeBase struct {
 // serializers) can hold it in one variable without a giant union
 // type. `Base()` returns the embedded `Record` so the common fields
 // are reachable without a type switch.
+//
+// `AffectedAny` returns the record's per-ecosystem `Affected` slice
+// with each element boxed as `any` (the concrete `*AffectedX`
+// pointer is preserved). It lets callers that merge across
+// ecosystems pull the affected entries without a per-type switch or
+// reflection — every `RecordX` implements it, so the compiler
+// guarantees full coverage as new ecosystems are added.
 type OSVRecord interface {
 	Base() *Record
+	AffectedAny() []any
+}
+
+// affectedAny boxes each element of a per-ecosystem `[]AffectedX`
+// slice as `any`, returning a slice of pointers to independent
+// copies. Concrete `RecordX.AffectedAny` methods delegate here so the
+// boxing logic lives in one place.
+func affectedAny[T any](in []T) []any {
+	out := make([]any, len(in))
+	for i := range in {
+		v := in[i]
+		out[i] = &v
+	}
+	return out
 }
 
 // Parse reads one OSV record from r and returns it as an OSVRecord

@@ -20,7 +20,8 @@ type RecordAndroid struct {
 	DatabaseSpecific TopAndroid        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordAndroid) Base() *Record { return &r.Record }
+func (r *RecordAndroid) Base() *Record      { return &r.Record }
+func (r *RecordAndroid) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedAndroid struct {
 	AffectedBase
@@ -102,7 +103,8 @@ type RecordBitnami struct {
 	DatabaseSpecific TopBitnami        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordBitnami) Base() *Record { return &r.Record }
+func (r *RecordBitnami) Base() *Record      { return &r.Record }
+func (r *RecordBitnami) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedBitnami struct {
 	AffectedBase
@@ -149,7 +151,8 @@ type RecordDebian struct {
 	DatabaseSpecific TopDebian        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordDebian) Base() *Record { return &r.Record }
+func (r *RecordDebian) Base() *Record      { return &r.Record }
+func (r *RecordDebian) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedDebian struct {
 	AffectedBase
@@ -195,7 +198,8 @@ type RecordGHC struct {
 	DatabaseSpecific TopGHC        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordGHC) Base() *Record { return &r.Record }
+func (r *RecordGHC) Base() *Record      { return &r.Record }
+func (r *RecordGHC) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedGHC struct {
 	AffectedBase
@@ -245,7 +249,8 @@ type RecordHackage struct {
 	DatabaseSpecific TopHackage        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordHackage) Base() *Record { return &r.Record }
+func (r *RecordHackage) Base() *Record      { return &r.Record }
+func (r *RecordHackage) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedHackage struct {
 	AffectedBase
@@ -295,7 +300,8 @@ type RecordJulia struct {
 	DatabaseSpecific TopJulia        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordJulia) Base() *Record { return &r.Record }
+func (r *RecordJulia) Base() *Record      { return &r.Record }
+func (r *RecordJulia) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedJulia struct {
 	AffectedBase
@@ -362,7 +368,8 @@ type RecordLinux struct {
 	DatabaseSpecific TopLinux        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordLinux) Base() *Record { return &r.Record }
+func (r *RecordLinux) Base() *Record      { return &r.Record }
+func (r *RecordLinux) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedLinux struct {
 	AffectedBase
@@ -415,7 +422,8 @@ type RecordMageia struct {
 	DatabaseSpecific TopMageia        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordMageia) Base() *Record { return &r.Record }
+func (r *RecordMageia) Base() *Record      { return &r.Record }
+func (r *RecordMageia) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedMageia struct {
 	AffectedBase
@@ -461,7 +469,8 @@ type RecordSUSE struct {
 	DatabaseSpecific TopSUSE        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordSUSE) Base() *Record { return &r.Record }
+func (r *RecordSUSE) Base() *Record      { return &r.Record }
+func (r *RecordSUSE) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedSUSE struct {
 	AffectedBase
@@ -511,7 +520,8 @@ type RecordOpenSUSE struct {
 	DatabaseSpecific TopOpenSUSE        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordOpenSUSE) Base() *Record { return &r.Record }
+func (r *RecordOpenSUSE) Base() *Record      { return &r.Record }
+func (r *RecordOpenSUSE) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedOpenSUSE struct {
 	AffectedBase
@@ -557,7 +567,8 @@ type RecordUbuntu struct {
 	DatabaseSpecific TopUbuntu        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordUbuntu) Base() *Record { return &r.Record }
+func (r *RecordUbuntu) Base() *Record      { return &r.Record }
+func (r *RecordUbuntu) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedUbuntu struct {
 	AffectedBase
@@ -665,7 +676,8 @@ type RecordVSCode struct {
 	DatabaseSpecific TopVSCode        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordVSCode) Base() *Record { return &r.Record }
+func (r *RecordVSCode) Base() *Record      { return &r.Record }
+func (r *RecordVSCode) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedVSCode struct {
 	AffectedBase
@@ -735,7 +747,8 @@ type RecordOpam struct {
 	DatabaseSpecific TopOpam        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordOpam) Base() *Record { return &r.Record }
+func (r *RecordOpam) Base() *Record      { return &r.Record }
+func (r *RecordOpam) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedOpam struct {
 	AffectedBase
@@ -785,7 +798,8 @@ type RecordOpenEuler struct {
 	DatabaseSpecific TopOpenEuler        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordOpenEuler) Base() *Record { return &r.Record }
+func (r *RecordOpenEuler) Base() *Record      { return &r.Record }
+func (r *RecordOpenEuler) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedOpenEuler struct {
 	AffectedBase

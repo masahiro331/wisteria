@@ -16,7 +16,8 @@ type RecordMaven struct {
 	DatabaseSpecific TopMaven        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordMaven) Base() *Record { return &r.Record }
+func (r *RecordMaven) Base() *Record      { return &r.Record }
+func (r *RecordMaven) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedMaven struct {
 	AffectedBase

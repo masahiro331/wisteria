@@ -23,7 +23,8 @@ type RecordHex struct {
 	DatabaseSpecific TopHex        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordHex) Base() *Record { return &r.Record }
+func (r *RecordHex) Base() *Record      { return &r.Record }
+func (r *RecordHex) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedHex struct {
 	AffectedBase
@@ -80,7 +81,8 @@ type RecordNuGet struct {
 	DatabaseSpecific TopNuGet        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordNuGet) Base() *Record { return &r.Record }
+func (r *RecordNuGet) Base() *Record      { return &r.Record }
+func (r *RecordNuGet) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedNuGet struct {
 	AffectedBase
@@ -151,7 +153,8 @@ type RecordRubyGems struct {
 	DatabaseSpecific TopRubyGems        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordRubyGems) Base() *Record { return &r.Record }
+func (r *RecordRubyGems) Base() *Record      { return &r.Record }
+func (r *RecordRubyGems) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedRubyGems struct {
 	AffectedBase
@@ -222,7 +225,8 @@ type RecordPub struct {
 	DatabaseSpecific TopPub        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordPub) Base() *Record { return &r.Record }
+func (r *RecordPub) Base() *Record      { return &r.Record }
+func (r *RecordPub) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedPub struct {
 	AffectedBase
@@ -276,7 +280,8 @@ type RecordSwiftURL struct {
 	DatabaseSpecific TopSwiftURL        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordSwiftURL) Base() *Record { return &r.Record }
+func (r *RecordSwiftURL) Base() *Record      { return &r.Record }
+func (r *RecordSwiftURL) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedSwiftURL struct {
 	AffectedBase
@@ -330,7 +335,8 @@ type RecordGitHubActions struct {
 	DatabaseSpecific TopGitHubActions        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordGitHubActions) Base() *Record { return &r.Record }
+func (r *RecordGitHubActions) Base() *Record      { return &r.Record }
+func (r *RecordGitHubActions) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedGitHubActions struct {
 	AffectedBase
@@ -384,7 +390,8 @@ type RecordPackagist struct {
 	DatabaseSpecific TopPackagist        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordPackagist) Base() *Record { return &r.Record }
+func (r *RecordPackagist) Base() *Record      { return &r.Record }
+func (r *RecordPackagist) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedPackagist struct {
 	AffectedBase
@@ -449,7 +456,8 @@ type RecordCratesIO struct {
 	DatabaseSpecific TopCratesIO        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordCratesIO) Base() *Record { return &r.Record }
+func (r *RecordCratesIO) Base() *Record      { return &r.Record }
+func (r *RecordCratesIO) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedCratesIO struct {
 	AffectedBase

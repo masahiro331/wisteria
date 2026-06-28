@@ -20,7 +20,8 @@ type RecordChainguard struct {
 	DatabaseSpecific TopChainguard        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordChainguard) Base() *Record { return &r.Record }
+func (r *RecordChainguard) Base() *Record      { return &r.Record }
+func (r *RecordChainguard) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedChainguard struct {
 	AffectedBase
@@ -73,7 +74,8 @@ type RecordWolfi struct {
 	DatabaseSpecific TopWolfi        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordWolfi) Base() *Record { return &r.Record }
+func (r *RecordWolfi) Base() *Record      { return &r.Record }
+func (r *RecordWolfi) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedWolfi struct {
 	AffectedBase
@@ -126,7 +128,8 @@ type RecordMinimOS struct {
 	DatabaseSpecific TopMinimOS        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordMinimOS) Base() *Record { return &r.Record }
+func (r *RecordMinimOS) Base() *Record      { return &r.Record }
+func (r *RecordMinimOS) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedMinimOS struct {
 	AffectedBase
@@ -179,7 +182,8 @@ type RecordRockyLinux struct {
 	DatabaseSpecific TopRockyLinux        `json:"database_specific,omitzero"`
 }
 
-func (r *RecordRockyLinux) Base() *Record { return &r.Record }
+func (r *RecordRockyLinux) Base() *Record      { return &r.Record }
+func (r *RecordRockyLinux) AffectedAny() []any { return affectedAny(r.Affected) }
 
 type AffectedRockyLinux struct {
 	AffectedBase

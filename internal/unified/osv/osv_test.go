@@ -190,6 +190,75 @@ func TestRoundTrip_PyPI(t *testing.T) {
 	}
 }
 
+// TestRoundTrip_PerEcosystem pins one representative JSON shape per
+// ecosystem-payload family (simple / distro / ghsa / freeform) and
+// confirms parse → marshal stays semantically equal through the
+// `Parse` dispatch path. The full corpus check lives in
+// tools/schema-coverage; this guards the typed schema for the
+// non-PyPI ecosystems in `make test` so a struct that silently rots
+// (a renamed json tag, a dropped field, an IsZero regression) fails
+// fast. When a new ecosystem lands, add a case here.
+func TestRoundTrip_PerEcosystem(t *testing.T) {
+	cases := []struct {
+		name string
+		eco  Ecosystem
+		body string
+	}{
+		{
+			name: "Alpine simple source",
+			eco:  EcosystemAlpine,
+			body: `{"id":"CVE-2024-0001","affected":[{"package":{"ecosystem":"Alpine:v3.19","name":"openssl"},"ranges":[{"type":"ECOSYSTEM","events":[{"introduced":"0"},{"fixed":"3.1.0-r1"}]}],"database_specific":{"source":"https://example/alpine.json"}}]}`,
+		},
+		{
+			name: "Debian ecosystem_specific urgency",
+			eco:  EcosystemDebian,
+			body: `{"id":"DSA-1","affected":[{"package":{"ecosystem":"Debian:12","name":"curl"},"ecosystem_specific":{"urgency":"high"},"database_specific":{"source":"https://example/debian.json"}}]}`,
+		},
+		{
+			name: "Ubuntu binaries + cves_map",
+			eco:  EcosystemUbuntu,
+			body: `{"id":"USN-1","affected":[{"package":{"ecosystem":"Ubuntu:22.04:LTS","name":"nginx"},"ecosystem_specific":{"ubuntu_priority":"medium","binaries":[{"binary_name":"nginx-core","binary_version":"1.18.0"}]},"database_specific":{"cves_map":{"CVE-2024-9999":{"status":"released"}},"source":"https://example/ubuntu.json"}}]}`,
+		},
+		{
+			name: "Go top metadata + ecosystem imports",
+			eco:  EcosystemGo,
+			body: `{"id":"GO-2024-0001","affected":[{"package":{"ecosystem":"Go","name":"golang.org/x/net"},"ecosystem_specific":{"imports":[{"path":"golang.org/x/net/http2","symbols":["Server"]}]},"database_specific":{"source":"https://example/go.json"}}],"database_specific":{"review_status":"REVIEWED","url":"https://pkg.go.dev/vuln/GO-2024-0001"}}`,
+		},
+		{
+			name: "GHC top home/repository",
+			eco:  EcosystemGHC,
+			body: `{"id":"HSEC-1","affected":[{"package":{"ecosystem":"GHC","name":"base"},"database_specific":{"osv":"HSEC","source":"https://example/ghc.json"}}],"database_specific":{"home":"https://example","repository":"https://example/repo"}}`,
+		},
+		{
+			name: "Maven GHSA top cwe_ids preserved as empty array",
+			eco:  EcosystemMaven,
+			body: `{"id":"GHSA-m","affected":[{"package":{"ecosystem":"Maven","name":"org.example:lib"},"ranges":[{"type":"ECOSYSTEM","events":[{"introduced":"0"},{"fixed":"1.2.3"}]}],"database_specific":{"ghsa":"GHSA-m","source":"https://example/maven.json"}}],"database_specific":{"cwe_ids":[],"github_reviewed":true,"severity":"HIGH"}}`,
+		},
+		{
+			name: "Maven per-affected cvss object form",
+			eco:  EcosystemMaven,
+			body: `{"id":"MAL-m","affected":[{"package":{"ecosystem":"Maven","name":"org.example:bad"},"database_specific":{"cvss":{"score":9.8,"vectorString":"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"},"source":"https://example/maven.json"}}]}`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec, err := Parse(tc.eco, strings.NewReader(tc.body))
+			if err != nil {
+				t.Fatalf("Parse(%s): %v", tc.eco, err)
+			}
+			out, err := json.Marshal(rec)
+			if err != nil {
+				t.Fatalf("Marshal: %v", err)
+			}
+			if !equalJSON(t, []byte(tc.body), out) {
+				inB, _ := json.MarshalIndent(jsonAny(t, []byte(tc.body)), "", "  ")
+				outB, _ := json.MarshalIndent(jsonAny(t, out), "", "  ")
+				t.Errorf("round-trip diff:\n in = %s\nout = %s", inB, outB)
+			}
+		})
+	}
+}
+
 func equalJSON(t *testing.T, a, b []byte) bool {
 	t.Helper()
 	aa, _ := json.Marshal(jsonAny(t, a))
