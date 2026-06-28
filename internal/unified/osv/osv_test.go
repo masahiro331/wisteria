@@ -191,9 +191,10 @@ func TestRoundTrip_PyPI(t *testing.T) {
 }
 
 // TestRoundTrip_PerEcosystem pins one representative JSON shape per
-// ecosystem-payload family (simple / distro / ghsa / freeform) and
-// confirms parse → marshal stays semantically equal through the
-// `Parse` dispatch path. The full corpus check lives in
+// ecosystem-payload family (simple / distro / ghsa / freeform /
+// falsepositive) and confirms parse → marshal stays semantically
+// equal through the `Parse` dispatch path. The full corpus check
+// lives in
 // tools/schema-coverage; this guards the typed schema for the
 // non-PyPI ecosystems in `make test` so a struct that silently rots
 // (a renamed json tag, a dropped field, an IsZero regression) fails
@@ -238,6 +239,20 @@ func TestRoundTrip_PerEcosystem(t *testing.T) {
 			name: "Maven per-affected cvss object form",
 			eco:  EcosystemMaven,
 			body: `{"id":"MAL-m","affected":[{"package":{"ecosystem":"Maven","name":"org.example:bad"},"database_specific":{"cvss":{"score":9.8,"vectorString":"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"},"source":"https://example/maven.json"}}]}`,
+		},
+		{
+			// `false_positive` is an omitempty bool, so it only
+			// survives the round-trip when set true — exactly the
+			// regression a value-typed range database_specific would
+			// risk dropping.
+			name: "Chainguard range false_positive",
+			eco:  EcosystemChainguard,
+			body: `{"id":"CGA-1","affected":[{"package":{"ecosystem":"Chainguard","name":"openssl"},"ranges":[{"type":"ECOSYSTEM","events":[{"introduced":"0"},{"fixed":"3.1.0"}],"database_specific":{"false_positive":true}}],"database_specific":{"source":"https://example/chainguard.json"}}]}`,
+		},
+		{
+			name: "Rocky Linux range yum_repository",
+			eco:  EcosystemRockyLinux,
+			body: `{"id":"RLSA-1","affected":[{"package":{"ecosystem":"Rocky Linux:9","name":"kernel"},"ranges":[{"type":"ECOSYSTEM","events":[{"introduced":"0"},{"fixed":"5.14.0-1.el9"}],"database_specific":{"yum_repository":"BaseOS"}}],"database_specific":{"source":"https://example/rocky.json"}}]}`,
 		},
 	}
 	for _, tc := range cases {
