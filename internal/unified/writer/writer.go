@@ -36,6 +36,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -145,6 +146,22 @@ func CVEPath(outDir, cveID string) (string, bool) {
 	return filepath.Join(outDir, cveBucket, m[1], cveID+".json"), true
 }
 
+// RelPath returns the outDir-relative, slash-separated path Write uses
+// for one record: cve/<year>/<CVE-ID>.json for CVE PrimaryIDs, else
+// standalone/<ecosystem>/<escaped-id>.json. Stage 5 (indexer) stores
+// this value verbatim in index entries, so it is the single source of
+// truth for record routing — bucketPath below derives from it.
+func RelPath(rec advisory.UnifiedAdvisory) (string, error) {
+	if m := cveIDPattern.FindStringSubmatch(rec.PrimaryID); m != nil {
+		return path.Join(cveBucket, m[1], rec.PrimaryID+".json"), nil
+	}
+	eco, err := primaryEcosystem(rec.Provenances)
+	if err != nil {
+		return "", fmt.Errorf("writer: %s: %w", rec.PrimaryID, err)
+	}
+	return path.Join(standaloneBucket, eco, escapeFilename(rec.PrimaryID)+".json"), nil
+}
+
 // Write serializes one record to its bucket-derived path under outDir.
 // The bucket directory is MkdirAll'd lazily on first use (cached for
 // the life of the process) so concurrent callers writing into the same
@@ -192,19 +209,15 @@ func ensureDir(dir string) error {
 	return nil
 }
 
-// bucketPath returns the directory + filename for one record. CVE-IDs go
-// to cve/<year>/ (delegated to CVEPath so the routing rule lives in one
-// place); everything else goes to standalone/<ecosystem>/, where
-// ecosystem comes from the highest-priority OSV provenance.
+// bucketPath returns the directory + filename for one record, derived
+// from RelPath so the routing rule lives in one place.
 func bucketPath(outDir string, rec advisory.UnifiedAdvisory) (dir, file string, err error) {
-	if path, ok := CVEPath(outDir, rec.PrimaryID); ok {
-		return filepath.Dir(path), filepath.Base(path), nil
-	}
-	eco, err := primaryEcosystem(rec.Provenances)
+	rel, err := RelPath(rec)
 	if err != nil {
-		return "", "", fmt.Errorf("writer: %s: %w", rec.PrimaryID, err)
+		return "", "", err
 	}
-	return filepath.Join(outDir, standaloneBucket, eco), escapeFilename(rec.PrimaryID) + ".json", nil
+	full := filepath.Join(outDir, filepath.FromSlash(rel))
+	return filepath.Dir(full), filepath.Base(full), nil
 }
 
 // primaryEcosystem picks the OSV provenance with the lowest PriorityRank.
