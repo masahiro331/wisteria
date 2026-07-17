@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/masahiro331/wisteria/internal/unified"
 	"github.com/masahiro331/wisteria/internal/unified/annotator"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
 // minimal exploitdb CSV (id 1 → CVE-2024-0001) sharing the header from
@@ -38,7 +38,7 @@ func TestRunAll_RunsAllThreeAnnotators(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
-	var got unified.UnifiedAdvisory
+	var got advisory.UnifiedAdvisory
 	if err := json.Unmarshal(body, &got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}

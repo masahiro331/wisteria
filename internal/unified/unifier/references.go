@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/masahiro331/wisteria/internal/unified"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
 // mergeReferences normalizes URLs (lowercase scheme/host, strip trailing
@@ -15,7 +15,7 @@ import (
 // Malformed URLs that net/url can't parse are kept verbatim so the
 // pipeline never silently drops upstream data; they just don't benefit
 // from normalization.
-func mergeReferences(in []unified.Reference) []unified.Reference {
+func mergeReferences(in []advisory.Reference) []advisory.Reference {
 	if len(in) == 0 {
 		return nil
 	}
@@ -35,7 +35,7 @@ func mergeReferences(in []unified.Reference) []unified.Reference {
 			b.tags[tag] = struct{}{}
 		}
 	}
-	out := make([]unified.Reference, 0, len(buckets))
+	out := make([]advisory.Reference, 0, len(buckets))
 	for _, b := range buckets {
 		var tags []string
 		if len(b.tags) > 0 {
@@ -45,7 +45,7 @@ func mergeReferences(in []unified.Reference) []unified.Reference {
 			}
 			sort.Strings(tags)
 		}
-		out = append(out, unified.Reference{URL: b.url, Tags: tags})
+		out = append(out, advisory.Reference{URL: b.url, Tags: tags})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].URL < out[j].URL })
 	return out

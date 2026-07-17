@@ -11,9 +11,9 @@ import (
 
 	"github.com/masahiro331/wisteria/internal/ai"
 	"github.com/masahiro331/wisteria/internal/ai/ollama"
-	"github.com/masahiro331/wisteria/internal/unified"
 	"github.com/masahiro331/wisteria/internal/unified/writer"
 	"github.com/masahiro331/wisteria/internal/x/cachedir"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
 // AISummarizeOptions captures the per-invocation knobs the user passes
@@ -60,7 +60,7 @@ func newAISummarizeCmd(factory AIFactory) *cobra.Command {
 				return errors.New("exactly one of --from-stdin or --id is required")
 			}
 
-			advisory, err := loadAdvisory(cmd, fromStdin, id)
+			adv, err := loadAdvisory(cmd, fromStdin, id)
 			if err != nil {
 				return err
 			}
@@ -70,7 +70,7 @@ func newAISummarizeCmd(factory AIFactory) *cobra.Command {
 				return fmt.Errorf("build summarizer: %w", err)
 			}
 
-			summary, err := summarizer.Summarize(cmd.Context(), advisory)
+			summary, err := summarizer.Summarize(cmd.Context(), adv)
 			if err != nil {
 				return fmt.Errorf("summarize: %w", err)
 			}
@@ -89,42 +89,42 @@ func newAISummarizeCmd(factory AIFactory) *cobra.Command {
 	return c
 }
 
-func loadAdvisory(cmd *cobra.Command, fromStdin bool, id string) (unified.UnifiedAdvisory, error) {
+func loadAdvisory(cmd *cobra.Command, fromStdin bool, id string) (advisory.UnifiedAdvisory, error) {
 	if fromStdin {
 		body, err := io.ReadAll(os.Stdin)
 		if err != nil {
-			return unified.UnifiedAdvisory{}, fmt.Errorf("read stdin: %w", err)
+			return advisory.UnifiedAdvisory{}, fmt.Errorf("read stdin: %w", err)
 		}
-		var advisory unified.UnifiedAdvisory
-		if err := json.Unmarshal(body, &advisory); err != nil {
-			return unified.UnifiedAdvisory{}, fmt.Errorf("decode UnifiedAdvisory from stdin: %w", err)
+		var adv advisory.UnifiedAdvisory
+		if err := json.Unmarshal(body, &adv); err != nil {
+			return advisory.UnifiedAdvisory{}, fmt.Errorf("decode UnifiedAdvisory from stdin: %w", err)
 		}
-		return advisory, nil
+		return adv, nil
 	}
 
 	cacheDirOverride, _ := cmd.Flags().GetString("cache-dir")
 	root, err := cachedir.Root(cacheDirOverride)
 	if err != nil {
-		return unified.UnifiedAdvisory{}, err
+		return advisory.UnifiedAdvisory{}, err
 	}
 	outDir, err := writer.OutDir(root)
 	if err != nil {
-		return unified.UnifiedAdvisory{}, fmt.Errorf("resolve unified dir: %w", err)
+		return advisory.UnifiedAdvisory{}, fmt.Errorf("resolve unified dir: %w", err)
 	}
 
 	path, ok := writer.CVEPath(outDir, id)
 	if !ok {
-		return unified.UnifiedAdvisory{}, fmt.Errorf("--id %q is not yet supported (only CVE-YYYY-NNNN ids are routed; standalone lookup is a follow-up)", id)
+		return advisory.UnifiedAdvisory{}, fmt.Errorf("--id %q is not yet supported (only CVE-YYYY-NNNN ids are routed; standalone lookup is a follow-up)", id)
 	}
 	body, err := os.ReadFile(path)
 	if err != nil {
-		return unified.UnifiedAdvisory{}, fmt.Errorf("read %s: %w", path, err)
+		return advisory.UnifiedAdvisory{}, fmt.Errorf("read %s: %w", path, err)
 	}
-	var advisory unified.UnifiedAdvisory
-	if err := json.Unmarshal(body, &advisory); err != nil {
-		return unified.UnifiedAdvisory{}, fmt.Errorf("decode %s: %w", path, err)
+	var adv advisory.UnifiedAdvisory
+	if err := json.Unmarshal(body, &adv); err != nil {
+		return advisory.UnifiedAdvisory{}, fmt.Errorf("decode %s: %w", path, err)
 	}
-	return advisory, nil
+	return adv, nil
 }
 
 // defaultAIFactory builds production-flavored summarizers from the

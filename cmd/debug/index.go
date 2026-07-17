@@ -10,6 +10,7 @@ import (
 	"github.com/masahiro331/wisteria/internal/unified"
 	"github.com/masahiro331/wisteria/internal/unified/walker"
 	"github.com/masahiro331/wisteria/internal/x/cachedir"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
 // newIndexCmd returns `wisteria debug index`. With no flag it prints a
@@ -75,14 +76,14 @@ func printID(cmd *cobra.Command, idx map[string][]unified.IndexEntry, id string)
 func printDistribution(cmd *cobra.Command, idx map[string][]unified.IndexEntry) {
 	out := cmd.OutOrStdout()
 
-	kindCounts := map[unified.SourceKind]int{}
+	kindCounts := map[advisory.SourceKind]int{}
 	histogram := map[int]int{}
 	ecoCounts := map[string]int{}
 	for _, entries := range idx {
 		histogram[len(entries)]++
 		for _, e := range entries {
 			kindCounts[e.Kind]++
-			if e.Kind == unified.SourceOSV {
+			if e.Kind == advisory.SourceOSV {
 				ecoCounts[e.Source]++
 			}
 		}
@@ -91,7 +92,7 @@ func printDistribution(cmd *cobra.Command, idx map[string][]unified.IndexEntry) 
 	fmt.Fprintf(out, "PrimaryIDs: %d\n", len(idx))
 
 	fmt.Fprintln(out, "By Kind:")
-	for _, k := range []unified.SourceKind{unified.SourceOSV, unified.SourceCVE} {
+	for _, k := range []advisory.SourceKind{advisory.SourceOSV, advisory.SourceCVE} {
 		if v, ok := kindCounts[k]; ok {
 			fmt.Fprintf(out, "  %s: %d\n", k, v)
 		}

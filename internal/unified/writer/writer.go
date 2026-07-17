@@ -41,8 +41,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/masahiro331/wisteria/internal/unified"
 	"github.com/masahiro331/wisteria/internal/unified/unifier"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
 const (
@@ -149,7 +149,7 @@ func CVEPath(outDir, cveID string) (string, bool) {
 // The bucket directory is MkdirAll'd lazily on first use (cached for
 // the life of the process) so concurrent callers writing into the same
 // bucket pay the syscall cost once. Per-file atomic via temp + rename.
-func Write(outDir string, rec unified.UnifiedAdvisory) error {
+func Write(outDir string, rec advisory.UnifiedAdvisory) error {
 	dir, file, err := bucketPath(outDir, rec)
 	if err != nil {
 		return err
@@ -196,7 +196,7 @@ func ensureDir(dir string) error {
 // to cve/<year>/ (delegated to CVEPath so the routing rule lives in one
 // place); everything else goes to standalone/<ecosystem>/, where
 // ecosystem comes from the highest-priority OSV provenance.
-func bucketPath(outDir string, rec unified.UnifiedAdvisory) (dir, file string, err error) {
+func bucketPath(outDir string, rec advisory.UnifiedAdvisory) (dir, file string, err error) {
 	if path, ok := CVEPath(outDir, rec.PrimaryID); ok {
 		return filepath.Dir(path), filepath.Base(path), nil
 	}
@@ -211,18 +211,18 @@ func bucketPath(outDir string, rec unified.UnifiedAdvisory) (dir, file string, e
 // Standalone PrimaryIDs come from OSV by definition (no CVE-ID alias), so
 // missing OSV here is an upstream bug in the index; we surface it as an
 // error rather than silently defaulting to a fallback bucket.
-func primaryEcosystem(provs []unified.Provenance) (string, error) {
+func primaryEcosystem(provs []advisory.Provenance) (string, error) {
 	bestRank := -1
 	best := ""
 	for _, p := range provs {
-		if p.Kind != unified.SourceOSV {
+		if p.Kind != advisory.SourceOSV {
 			continue
 		}
 		eco := osvEcosystem(p.Path)
 		if eco == "" {
 			continue
 		}
-		rank := unifier.PriorityRank(unifier.SourceTag(unified.SourceOSV, eco))
+		rank := unifier.PriorityRank(unifier.SourceTag(advisory.SourceOSV, eco))
 		if best == "" || rank < bestRank {
 			best = eco
 			bestRank = rank

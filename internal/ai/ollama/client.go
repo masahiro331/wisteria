@@ -18,7 +18,7 @@ import (
 	"net/http"
 
 	"github.com/masahiro331/wisteria/internal/ai"
-	"github.com/masahiro331/wisteria/internal/unified"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
 const (
@@ -90,7 +90,7 @@ type chatResponse struct {
 // content into ai.AdvisoryAISummary. Decode failures wrap the raw
 // model content so callers can inspect what the model returned. The
 // method makes *Client satisfy ai.Summarizer.
-func (c *Client) Summarize(ctx context.Context, advisory unified.UnifiedAdvisory) (*ai.AdvisoryAISummary, error) {
+func (c *Client) Summarize(ctx context.Context, advisory advisory.UnifiedAdvisory) (*ai.AdvisoryAISummary, error) {
 	advisoryJSON, err := json.Marshal(advisory)
 	if err != nil {
 		return nil, fmt.Errorf("marshal advisory: %w", err)

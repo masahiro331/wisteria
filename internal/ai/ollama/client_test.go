@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/masahiro331/wisteria/internal/ai/ollama"
-	"github.com/masahiro331/wisteria/internal/unified"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
-func sampleAdvisory() unified.UnifiedAdvisory {
-	return unified.UnifiedAdvisory{
+func sampleAdvisory() advisory.UnifiedAdvisory {
+	return advisory.UnifiedAdvisory{
 		PrimaryID: "CVE-2024-0001",
 	}
 }

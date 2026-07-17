@@ -9,27 +9,27 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/masahiro331/wisteria/internal/unified"
 	"github.com/masahiro331/wisteria/internal/unified/writer"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
-func cveAdvisory(id, ecosystem string) unified.UnifiedAdvisory {
-	return unified.UnifiedAdvisory{
+func cveAdvisory(id, ecosystem string) advisory.UnifiedAdvisory {
+	return advisory.UnifiedAdvisory{
 		PrimaryID: id,
-		Provenances: []unified.Provenance{
-			{Kind: unified.SourceCVE, Path: "cve/x.json", ID: id},
+		Provenances: []advisory.Provenance{
+			{Kind: advisory.SourceCVE, Path: "cve/x.json", ID: id},
 		},
 		// ecosystem only used by standalone bucket — kept here so the
 		// helper has one signature.
-		Descriptions: []unified.Description{{Lang: "en", Text: ecosystem}},
+		Descriptions: []advisory.Description{{Lang: "en", Text: ecosystem}},
 	}
 }
 
-func standaloneAdvisory(id, ecosystem string) unified.UnifiedAdvisory {
-	return unified.UnifiedAdvisory{
+func standaloneAdvisory(id, ecosystem string) advisory.UnifiedAdvisory {
+	return advisory.UnifiedAdvisory{
 		PrimaryID: id,
-		Provenances: []unified.Provenance{
-			{Kind: unified.SourceOSV, Path: "osv/" + ecosystem + "/x.json", ID: id},
+		Provenances: []advisory.Provenance{
+			{Kind: advisory.SourceOSV, Path: "osv/" + ecosystem + "/x.json", ID: id},
 		},
 	}
 }
@@ -65,7 +65,7 @@ func TestWrite_CVEBucketUsesYearFromID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected file %s: %v", got, err)
 	}
-	var round unified.UnifiedAdvisory
+	var round advisory.UnifiedAdvisory
 	if err := json.Unmarshal(body, &round); err != nil {
 		t.Fatalf("decode written file: %v", err)
 	}
@@ -98,13 +98,13 @@ func TestWrite_StandaloneNormalizesEcosystemSpaces(t *testing.T) {
 	cacheDir := t.TempDir()
 	outDir := initOutDir(t, cacheDir)
 
-	rec := unified.UnifiedAdvisory{
+	rec := advisory.UnifiedAdvisory{
 		PrimaryID: "RHSA-2024-1",
-		Provenances: []unified.Provenance{
+		Provenances: []advisory.Provenance{
 			// PyPI is unranked? — actually present in the priority list,
 			// but lower than Red Hat. The test asserts Red_Hat wins.
-			{Kind: unified.SourceOSV, Path: "osv/PyPI/x.json", ID: "PYSEC-X"},
-			{Kind: unified.SourceOSV, Path: "osv/Red Hat/RHSA-2024-1.json", ID: "RHSA-2024-1"},
+			{Kind: advisory.SourceOSV, Path: "osv/PyPI/x.json", ID: "PYSEC-X"},
+			{Kind: advisory.SourceOSV, Path: "osv/Red Hat/RHSA-2024-1.json", ID: "RHSA-2024-1"},
 		},
 	}
 	if err := writer.Write(outDir, rec); err != nil {
@@ -120,11 +120,11 @@ func TestWrite_StandalonePicksHighestPriorityEcosystem(t *testing.T) {
 	cacheDir := t.TempDir()
 	outDir := initOutDir(t, cacheDir)
 
-	rec := unified.UnifiedAdvisory{
+	rec := advisory.UnifiedAdvisory{
 		PrimaryID: "OSV-PICK-1",
-		Provenances: []unified.Provenance{
-			{Kind: unified.SourceOSV, Path: "osv/PyPI/x.json", ID: "OSV-PICK-1"},
-			{Kind: unified.SourceOSV, Path: "osv/AlmaLinux/x.json", ID: "OSV-PICK-1"},
+		Provenances: []advisory.Provenance{
+			{Kind: advisory.SourceOSV, Path: "osv/PyPI/x.json", ID: "OSV-PICK-1"},
+			{Kind: advisory.SourceOSV, Path: "osv/AlmaLinux/x.json", ID: "OSV-PICK-1"},
 		},
 	}
 	if err := writer.Write(outDir, rec); err != nil {
@@ -237,10 +237,10 @@ func TestWrite_StandaloneWithoutOSVProvenanceErrors(t *testing.T) {
 	cacheDir := t.TempDir()
 	outDir := initOutDir(t, cacheDir)
 
-	rec := unified.UnifiedAdvisory{
+	rec := advisory.UnifiedAdvisory{
 		PrimaryID: "GHSA-aaaa-bbbb-cccc",
-		Provenances: []unified.Provenance{
-			{Kind: unified.SourceCVE, Path: "cve/x.json", ID: "GHSA-aaaa-bbbb-cccc"},
+		Provenances: []advisory.Provenance{
+			{Kind: advisory.SourceCVE, Path: "cve/x.json", ID: "GHSA-aaaa-bbbb-cccc"},
 		},
 	}
 	if err := writer.Write(outDir, rec); err == nil {

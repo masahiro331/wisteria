@@ -28,9 +28,9 @@ import (
 	"strings"
 	"sync"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/masahiro331/wisteria/internal/unified"
+	"github.com/masahiro331/wisteria/pkg/advisory"
+	"golang.org/x/sync/errgroup"
 )
 
 // osvLite is the smallest OSV shape that PrimaryID resolution needs.
@@ -226,7 +226,7 @@ func parseOSVFile(ctx context.Context, rootFS *os.Root, job osvParseJob, results
 	}
 	entry := unified.IndexEntry{
 		Path:     job.relFromSources,
-		Kind:     unified.SourceOSV,
+		Kind:     advisory.SourceOSV,
 		Source:   job.ecosystem,
 		SourceID: rec.ID,
 	}
@@ -286,7 +286,7 @@ func walkCVE(ctx context.Context, sourcesRoot string, out map[string][]unified.I
 		}
 		out[cveID] = append(out[cveID], unified.IndexEntry{
 			Path:     relFromSources,
-			Kind:     unified.SourceCVE,
+			Kind:     advisory.SourceCVE,
 			Source:   "",
 			SourceID: cveID,
 		})

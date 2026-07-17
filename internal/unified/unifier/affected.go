@@ -3,14 +3,14 @@ package unifier
 import (
 	"cmp"
 
-	"github.com/masahiro331/wisteria/internal/unified"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
 // affectedItem pairs an AffectedRecord with the source tag used for
 // priority ordering. Same wrapper pattern as severityItem /
 // descriptionItem.
 type affectedItem struct {
-	record unified.AffectedRecord
+	record advisory.AffectedRecord
 	source string
 }
 
@@ -20,7 +20,7 @@ type affectedItem struct {
 // priority → Provenance.ID → input index. The trailing index keeps
 // reproducibility for the common case of one source emitting N
 // AffectedRecords with identical Provenance.
-func mergeAffected(in []affectedItem) []unified.AffectedRecord {
+func mergeAffected(in []affectedItem) []advisory.AffectedRecord {
 	sorted := stableSortByPriority(
 		in,
 		func(it affectedItem) string { return it.source },
@@ -29,7 +29,7 @@ func mergeAffected(in []affectedItem) []unified.AffectedRecord {
 	if sorted == nil {
 		return nil
 	}
-	out := make([]unified.AffectedRecord, len(sorted))
+	out := make([]advisory.AffectedRecord, len(sorted))
 	for i, it := range sorted {
 		out[i] = it.record
 	}

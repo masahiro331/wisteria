@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/masahiro331/wisteria/internal/unified"
 	"github.com/masahiro331/wisteria/internal/unified/annotator"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
 // kevCatalogJSON is a minimal KEV catalog matching the upstream shape.
@@ -57,7 +57,7 @@ func writeUnifiedCVE(t *testing.T, outDir, id string) string {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 	path := filepath.Join(dir, id+".json")
-	rec := unified.UnifiedAdvisory{PrimaryID: id}
+	rec := advisory.UnifiedAdvisory{PrimaryID: id}
 	body, err := json.MarshalIndent(rec, "", "  ")
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -96,7 +96,7 @@ func TestAnnotateKEV_HappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
-	var got unified.UnifiedAdvisory
+	var got advisory.UnifiedAdvisory
 	if err := json.Unmarshal(body, &got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -109,8 +109,8 @@ func TestAnnotateKEV_HappyPath(t *testing.T) {
 	if got.KEV.DateAdded != "2024-03-01" || got.KEV.DueDate != "2024-03-22" {
 		t.Errorf("KEV dates = %q/%q, want 2024-03-01/2024-03-22", got.KEV.DateAdded, got.KEV.DueDate)
 	}
-	if got.KEV.From.Kind != unified.SourceKEV {
-		t.Errorf("KEV.From.Kind = %q, want %q", got.KEV.From.Kind, unified.SourceKEV)
+	if got.KEV.From.Kind != advisory.SourceKEV {
+		t.Errorf("KEV.From.Kind = %q, want %q", got.KEV.From.Kind, advisory.SourceKEV)
 	}
 	if got.KEV.From.ID != "CVE-2024-0001" {
 		t.Errorf("KEV.From.ID = %q, want CVE-2024-0001", got.KEV.From.ID)
@@ -148,7 +148,7 @@ func TestAnnotateKEV_MissingCatalogIsNoOp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
-	var got unified.UnifiedAdvisory
+	var got advisory.UnifiedAdvisory
 	if err := json.Unmarshal(body, &got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}

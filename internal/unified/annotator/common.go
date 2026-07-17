@@ -6,22 +6,22 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/masahiro331/wisteria/internal/unified"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
 // readUnified loads one Stage 3 file. (_, false, nil) means the file is
 // absent — the caller skips. Any other I/O or decode error is returned.
-func readUnified(path string) (unified.UnifiedAdvisory, bool, error) {
+func readUnified(path string) (advisory.UnifiedAdvisory, bool, error) {
 	body, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return unified.UnifiedAdvisory{}, false, nil
+		return advisory.UnifiedAdvisory{}, false, nil
 	}
 	if err != nil {
-		return unified.UnifiedAdvisory{}, false, fmt.Errorf("annotator: read %s: %w", path, err)
+		return advisory.UnifiedAdvisory{}, false, fmt.Errorf("annotator: read %s: %w", path, err)
 	}
-	var rec unified.UnifiedAdvisory
+	var rec advisory.UnifiedAdvisory
 	if err := json.Unmarshal(body, &rec); err != nil {
-		return unified.UnifiedAdvisory{}, false, fmt.Errorf("annotator: decode %s: %w", path, err)
+		return advisory.UnifiedAdvisory{}, false, fmt.Errorf("annotator: decode %s: %w", path, err)
 	}
 	return rec, true, nil
 }
@@ -30,7 +30,7 @@ func readUnified(path string) (unified.UnifiedAdvisory, bool, error) {
 // not atomic — because Stage 4 always runs as part of `wisteria unify`
 // after Stage 3, so a crashed mid-write file is rebuilt on the next
 // pipeline run from upstream sources (which the user keeps under git).
-func writeUnified(path string, rec unified.UnifiedAdvisory) error {
+func writeUnified(path string, rec advisory.UnifiedAdvisory) error {
 	body, err := json.MarshalIndent(rec, "", "  ")
 	if err != nil {
 		return fmt.Errorf("annotator: marshal %s: %w", path, err)

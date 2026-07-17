@@ -3,14 +3,14 @@ package unifier
 import (
 	"cmp"
 
-	"github.com/masahiro331/wisteria/internal/unified"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
 // descriptionItem pairs an upstream Description with the source tag used
 // for priority ordering. Same shape as severityItem; the wrapper keeps
 // mergeDescriptions a pure function over already-tagged inputs.
 type descriptionItem struct {
-	unified.Description
+	advisory.Description
 	source string
 }
 
@@ -18,7 +18,7 @@ type descriptionItem struct {
 // §8.3) and orders them by source priority then language. Tie-break by
 // the original input index keeps OSV's Summary-then-Details pair stable
 // and gives reproducible JSON output.
-func mergeDescriptions(in []descriptionItem) []unified.Description {
+func mergeDescriptions(in []descriptionItem) []advisory.Description {
 	sorted := stableSortByPriority(
 		in,
 		func(it descriptionItem) string { return it.source },
@@ -27,7 +27,7 @@ func mergeDescriptions(in []descriptionItem) []unified.Description {
 	if sorted == nil {
 		return nil
 	}
-	out := make([]unified.Description, len(sorted))
+	out := make([]advisory.Description, len(sorted))
 	for i, it := range sorted {
 		out[i] = it.Description
 	}
