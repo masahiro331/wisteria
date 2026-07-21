@@ -26,9 +26,10 @@ import (
 	"sort"
 
 	"github.com/masahiro331/wisteria/internal/unified"
-	"github.com/masahiro331/wisteria/internal/unified/cve"
 	"github.com/masahiro331/wisteria/internal/unified/osv"
 	"github.com/masahiro331/wisteria/internal/unified/osv/ecosystem"
+	"github.com/masahiro331/wisteria/pkg/advisory"
+	"github.com/masahiro331/wisteria/pkg/advisory/cve"
 )
 
 // MergePrimary parses each IndexEntry under primaryID and applies the
@@ -42,13 +43,13 @@ import (
 // each ADP, e.g. CISA Vulnrichment). ADP IDs are suffixed with
 // "#adp:<shortName>" so downstream sorts treat them as parallel siblings
 // of the CNA without losing the source-of-record distinction.
-func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []unified.IndexEntry) (unified.UnifiedAdvisory, error) {
+func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []unified.IndexEntry) (advisory.UnifiedAdvisory, error) {
 	var (
-		refs        []unified.Reference
+		refs        []advisory.Reference
 		descs       []descriptionItem
 		sevs        []severityItem
 		affs        []affectedItem
-		provenances []unified.Provenance
+		provenances []advisory.Provenance
 	)
 	sourceIDs := make(map[string]struct{})
 	addSourceID := func(id string) {
@@ -59,17 +60,17 @@ func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []
 	}
 	for _, e := range entries {
 		if err := ctx.Err(); err != nil {
-			return unified.UnifiedAdvisory{}, err
+			return advisory.UnifiedAdvisory{}, err
 		}
 		path := filepath.Join(sourcesRoot, e.Path)
-		prov := unified.Provenance{Kind: e.Kind, Path: e.Path, ID: e.SourceID}
+		prov := advisory.Provenance{Kind: e.Kind, Path: e.Path, ID: e.SourceID}
 		provenances = append(provenances, prov)
 		addSourceID(e.SourceID)
 		switch e.Kind {
-		case unified.SourceOSV:
+		case advisory.SourceOSV:
 			rec, err := readOSV(path, e.Source)
 			if err != nil {
-				return unified.UnifiedAdvisory{}, fmt.Errorf("%s: %w", e.Path, err)
+				return advisory.UnifiedAdvisory{}, fmt.Errorf("%s: %w", e.Path, err)
 			}
 			base := rec.Base()
 			source := SourceTag(e.Kind, e.Source)
@@ -80,10 +81,10 @@ func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []
 			for _, a := range base.Aliases {
 				addSourceID(a)
 			}
-		case unified.SourceCVE:
+		case advisory.SourceCVE:
 			rec, err := readCVE(path)
 			if err != nil {
-				return unified.UnifiedAdvisory{}, fmt.Errorf("%s: %w", e.Path, err)
+				return advisory.UnifiedAdvisory{}, fmt.Errorf("%s: %w", e.Path, err)
 			}
 			cna := rec.Containers.CNA
 			refs = append(refs, CVEReferences(cna.References)...)
@@ -99,10 +100,10 @@ func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []
 				affs = append(affs, CVEAffectedRecords(adp.Affected, adpProv)...)
 			}
 		default:
-			return unified.UnifiedAdvisory{}, fmt.Errorf("%s: unsupported kind %q", e.Path, e.Kind)
+			return advisory.UnifiedAdvisory{}, fmt.Errorf("%s: unsupported kind %q", e.Path, e.Kind)
 		}
 	}
-	return unified.UnifiedAdvisory{
+	return advisory.UnifiedAdvisory{
 		PrimaryID:    primaryID,
 		SourceIDs:    sortedSet(sourceIDs),
 		Descriptions: mergeDescriptions(descs),

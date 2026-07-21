@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/masahiro331/wisteria/cmd"
-	"github.com/masahiro331/wisteria/internal/unified"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
 // runDebugAnnotate invokes the root command tree so persistent flag
@@ -48,7 +48,7 @@ func TestDebugAnnotate_AppliesKEVAndEPSS(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	body, _ := json.MarshalIndent(unified.UnifiedAdvisory{PrimaryID: "CVE-2024-0001"}, "", "  ")
+	body, _ := json.MarshalIndent(advisory.UnifiedAdvisory{PrimaryID: "CVE-2024-0001"}, "", "  ")
 	if err := os.WriteFile(target, body, 0o644); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestDebugAnnotate_AppliesKEVAndEPSS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	var rec unified.UnifiedAdvisory
+	var rec advisory.UnifiedAdvisory
 	if err := json.Unmarshal(got, &rec); err != nil {
 		t.Fatalf("decode: %v", err)
 	}

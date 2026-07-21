@@ -3,9 +3,9 @@ package unifier
 import (
 	"testing"
 
-	"github.com/masahiro331/wisteria/internal/unified"
 	"github.com/masahiro331/wisteria/internal/unified/osv"
 	"github.com/masahiro331/wisteria/internal/unified/osv/ecosystem"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
 // TestOSVAffectedRecords_PreservesConcreteType checks that the
@@ -13,7 +13,7 @@ import (
 // AffectedRecord.OSV slot (no type erasure to a useless wrapper, no
 // element-aliasing bug).
 func TestOSVAffectedRecords_PreservesConcreteType(t *testing.T) {
-	prov := unified.Provenance{Kind: unified.SourceOSV, Path: "osv/PyPI/x.json", ID: "PYSEC-1"}
+	prov := advisory.Provenance{Kind: advisory.SourceOSV, Path: "osv/PyPI/x.json", ID: "PYSEC-1"}
 
 	rec := &ecosystem.RecordPyPI{
 		Record: osv.Record{Ecosystem: osv.EcosystemPyPI, ID: "PYSEC-1"},
@@ -43,7 +43,7 @@ func TestOSVAffectedRecords_PreservesConcreteType(t *testing.T) {
 // classic loop-variable aliasing bug: each yielded pointer must
 // address its own copy, not a shared loop var.
 func TestOSVAffectedRecords_ElementsAreDistinct(t *testing.T) {
-	prov := unified.Provenance{Kind: unified.SourceOSV}
+	prov := advisory.Provenance{Kind: advisory.SourceOSV}
 	rec := &ecosystem.RecordPyPI{
 		Affected: []ecosystem.AffectedPyPI{
 			{AffectedBase: osv.AffectedBase{Package: &osv.Package{Name: "a"}}},
@@ -64,7 +64,7 @@ func TestOSVAffectedRecords_ElementsAreDistinct(t *testing.T) {
 // TestOSVAffectedRecords_NilRecord guards the nil-record path: no
 // panic and no spurious items.
 func TestOSVAffectedRecords_NilRecord(t *testing.T) {
-	prov := unified.Provenance{Kind: unified.SourceOSV}
+	prov := advisory.Provenance{Kind: advisory.SourceOSV}
 	if got := OSVAffectedRecords(nil, prov, "osv.PyPI"); len(got) != 0 {
 		t.Errorf("OSVAffectedRecords(nil) = %#v, want empty", got)
 	}

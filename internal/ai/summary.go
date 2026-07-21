@@ -15,7 +15,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/masahiro331/wisteria/internal/unified"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
 // Summarizer turns one UnifiedAdvisory into a structured English
@@ -23,7 +23,7 @@ import (
 // (labeling, exploit analysis) get their own sibling interfaces so a
 // provider can implement only the tasks it supports.
 type Summarizer interface {
-	Summarize(ctx context.Context, advisory unified.UnifiedAdvisory) (*AdvisoryAISummary, error)
+	Summarize(ctx context.Context, advisory advisory.UnifiedAdvisory) (*AdvisoryAISummary, error)
 }
 
 // AdvisoryAISummary is the structured output produced by the LLM for

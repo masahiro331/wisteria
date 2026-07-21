@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/masahiro331/wisteria/cmd"
-	"github.com/masahiro331/wisteria/internal/unified"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
 // unifyFixtureCacheDir builds a sources tree where one CVE has both an
@@ -85,14 +85,14 @@ func runDebugUnify(t *testing.T, args ...string) (stdout, stderr string, err err
 // runUnifyAndDecode is the shared setup: build the fixture, invoke
 // `wisteria debug unify --id <id>`, parse the stdout JSON. Tests below
 // assert one merge concern each so failures point at the broken field.
-func runUnifyAndDecode(t *testing.T) unified.UnifiedAdvisory {
+func runUnifyAndDecode(t *testing.T) advisory.UnifiedAdvisory {
 	t.Helper()
 	cacheDir := unifyFixtureCacheDir(t)
 	stdout, _, err := runDebugUnify(t, "--cache-dir", cacheDir, "--id", "CVE-2024-0001")
 	if err != nil {
 		t.Fatalf("debug unify: %v", err)
 	}
-	var got unified.UnifiedAdvisory
+	var got advisory.UnifiedAdvisory
 	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
 		t.Fatalf("decode JSON: %v\nstdout:\n%s", err, stdout)
 	}
@@ -126,7 +126,7 @@ func TestDebugUnify_Severities(t *testing.T) {
 	if len(got.Severities) != 1 {
 		t.Fatalf("Severities len = %d, want 1: %#v", len(got.Severities), got.Severities)
 	}
-	if got.Severities[0].From.Kind != unified.SourceCVE {
+	if got.Severities[0].From.Kind != advisory.SourceCVE {
 		t.Errorf("Severities[0].From.Kind = %q, want cve", got.Severities[0].From.Kind)
 	}
 }
@@ -236,7 +236,7 @@ func TestDebugUnify_SamplePicksFirstNLexicographically(t *testing.T) {
 	}
 	wantIDs := []string{"CVE-2024-0001", "CVE-2024-0002"}
 	for i, want := range wantIDs {
-		var rec unified.UnifiedAdvisory
+		var rec advisory.UnifiedAdvisory
 		if err := json.Unmarshal([]byte(lines[i]), &rec); err != nil {
 			t.Fatalf("decode line %d: %v\n%s", i, err, lines[i])
 		}

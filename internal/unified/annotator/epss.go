@@ -10,9 +10,9 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/masahiro331/wisteria/internal/unified"
 	"github.com/masahiro331/wisteria/internal/unified/epss"
 	"github.com/masahiro331/wisteria/internal/unified/writer"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
 const epssCatalogRelPath = "epss/epss_scores-current.csv"
@@ -68,9 +68,9 @@ func applyEPSSScore(outDir, modelVersion, scoreDate string, s epss.Score) error 
 	if !ok {
 		return nil
 	}
-	rec.EPSS = &unified.EPSSScore{
-		From: unified.Provenance{
-			Kind: unified.SourceEPSS,
+	rec.EPSS = &advisory.EPSSScore{
+		From: advisory.Provenance{
+			Kind: advisory.SourceEPSS,
 			Path: epssCatalogRelPath,
 			ID:   s.CVE,
 		},

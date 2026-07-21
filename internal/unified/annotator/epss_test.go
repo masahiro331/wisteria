@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/masahiro331/wisteria/internal/unified"
 	"github.com/masahiro331/wisteria/internal/unified/annotator"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
 const epssCSV = `#model_version:v2025.03.14,score_date:2026-04-24T12:55:00Z
@@ -45,7 +45,7 @@ func TestAnnotateEPSS_HappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
-	var got unified.UnifiedAdvisory
+	var got advisory.UnifiedAdvisory
 	if err := json.Unmarshal(body, &got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestAnnotateEPSS_HappyPath(t *testing.T) {
 	if got.EPSS.ScoreDate != "2026-04-24T12:55:00Z" {
 		t.Errorf("ScoreDate = %q", got.EPSS.ScoreDate)
 	}
-	if got.EPSS.From.Kind != unified.SourceEPSS {
+	if got.EPSS.From.Kind != advisory.SourceEPSS {
 		t.Errorf("From.Kind = %q", got.EPSS.From.Kind)
 	}
 	if got.EPSS.From.ID != "CVE-2024-0001" {
@@ -99,7 +99,7 @@ func TestAnnotateEPSS_MissingCatalogIsNoOp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
-	var got unified.UnifiedAdvisory
+	var got advisory.UnifiedAdvisory
 	if err := json.Unmarshal(body, &got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}

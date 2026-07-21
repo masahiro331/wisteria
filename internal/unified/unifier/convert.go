@@ -3,16 +3,16 @@ package unifier
 import (
 	"strconv"
 
-	"github.com/masahiro331/wisteria/internal/unified"
-	"github.com/masahiro331/wisteria/internal/unified/cve"
 	"github.com/masahiro331/wisteria/internal/unified/osv"
+	"github.com/masahiro331/wisteria/pkg/advisory"
+	"github.com/masahiro331/wisteria/pkg/advisory/cve"
 )
 
 // SourceTag is the "<kind>.<source>" string used by mergeSeverities to
 // look up PriorityRank. Exposed so the debug command can build it from
 // IndexEntry without re-implementing the format.
-func SourceTag(kind unified.SourceKind, source string) string {
-	if kind == unified.SourceCVE {
+func SourceTag(kind advisory.SourceKind, source string) string {
+	if kind == advisory.SourceCVE {
 		return SourceCVEMitre
 	}
 	return string(kind) + "." + source
@@ -21,34 +21,34 @@ func SourceTag(kind unified.SourceKind, source string) string {
 // OSVReferences converts upstream OSV references to the unified shape.
 // OSV `type` becomes a single tag so mergeReferences can union it with
 // CVE `tags`.
-func OSVReferences(in []osv.Reference) []unified.Reference {
-	out := make([]unified.Reference, 0, len(in))
+func OSVReferences(in []osv.Reference) []advisory.Reference {
+	out := make([]advisory.Reference, 0, len(in))
 	for _, r := range in {
 		var tags []string
 		if r.Type != "" {
 			tags = []string{r.Type}
 		}
-		out = append(out, unified.Reference{URL: r.URL, Tags: tags})
+		out = append(out, advisory.Reference{URL: r.URL, Tags: tags})
 	}
 	return out
 }
 
 // CVEReferences converts upstream CVE5 references to the unified shape.
-func CVEReferences(in []cve.Reference) []unified.Reference {
-	out := make([]unified.Reference, 0, len(in))
+func CVEReferences(in []cve.Reference) []advisory.Reference {
+	out := make([]advisory.Reference, 0, len(in))
 	for _, r := range in {
-		out = append(out, unified.Reference{URL: r.URL, Tags: append([]string(nil), r.Tags...)})
+		out = append(out, advisory.Reference{URL: r.URL, Tags: append([]string(nil), r.Tags...)})
 	}
 	return out
 }
 
 // OSVSeverities converts OSV severity entries (no Vector field upstream;
 // `score` carries the full CVSS vector string per OSV schema).
-func OSVSeverities(in []osv.Severity, from unified.Provenance, source string) []severityItem {
+func OSVSeverities(in []osv.Severity, from advisory.Provenance, source string) []severityItem {
 	out := make([]severityItem, 0, len(in))
 	for _, s := range in {
 		out = append(out, severityItem{
-			Severity: unified.Severity{
+			Severity: advisory.Severity{
 				Type:   s.Type,
 				Vector: s.Score, // OSV `score` is the vector string
 				From:   from,
@@ -63,14 +63,14 @@ func OSVSeverities(in []osv.Severity, from unified.Provenance, source string) []
 // into severity items. Non-CVSS Metric.Other is skipped — it carries
 // SSVC / KEV-like signals that don't fit the (Type, Vector, Score) shape
 // and aren't part of the §8.4 dedup contract.
-func CVEMetrics(in []cve.Metric, from unified.Provenance) []severityItem {
+func CVEMetrics(in []cve.Metric, from advisory.Provenance) []severityItem {
 	out := make([]severityItem, 0, len(in))
 	push := func(typ string, c *cve.CVSS) {
 		if c == nil {
 			return
 		}
 		out = append(out, severityItem{
-			Severity: unified.Severity{
+			Severity: advisory.Severity{
 				Type:   typ,
 				Vector: c.VectorString,
 				Score:  formatScore(c.BaseScore),
@@ -100,17 +100,17 @@ func formatScore(p *float64) string {
 // Summary then Details, both as English text. Lang is fixed to "en"
 // because OSV schema does not carry a per-text lang field. Empty
 // strings are skipped so we don't emit blank entries.
-func OSVDescriptions(rec osv.Record, from unified.Provenance, source string) []descriptionItem {
+func OSVDescriptions(rec osv.Record, from advisory.Provenance, source string) []descriptionItem {
 	var out []descriptionItem
 	if rec.Summary != "" {
 		out = append(out, descriptionItem{
-			Description: unified.Description{Lang: "en", Text: rec.Summary, From: from},
+			Description: advisory.Description{Lang: "en", Text: rec.Summary, From: from},
 			source:      source,
 		})
 	}
 	if rec.Details != "" {
 		out = append(out, descriptionItem{
-			Description: unified.Description{Lang: "en", Text: rec.Details, From: from},
+			Description: advisory.Description{Lang: "en", Text: rec.Details, From: from},
 			source:      source,
 		})
 	}
@@ -120,12 +120,12 @@ func OSVDescriptions(rec osv.Record, from unified.Provenance, source string) []d
 // CVEDescriptions converts a single Container's descriptions[]. The
 // caller invokes it once for the CNA and once per ADP so each container
 // can carry its own Provenance (typically with an "#adp:<name>" suffix
-// on the ID for ADPs). cve.Description.Value maps to unified.Description.Text.
-func CVEDescriptions(in []cve.Description, from unified.Provenance) []descriptionItem {
+// on the ID for ADPs). cve.Description.Value maps to advisory.Description.Text.
+func CVEDescriptions(in []cve.Description, from advisory.Provenance) []descriptionItem {
 	out := make([]descriptionItem, 0, len(in))
 	for _, d := range in {
 		out = append(out, descriptionItem{
-			Description: unified.Description{Lang: d.Lang, Text: d.Value, From: from},
+			Description: advisory.Description{Lang: d.Lang, Text: d.Value, From: from},
 			source:      SourceCVEMitre,
 		})
 	}
@@ -134,7 +134,7 @@ func CVEDescriptions(in []cve.Description, from unified.Provenance) []descriptio
 
 // OSVAffectedRecords flattens the per-ecosystem `RecordX.Affected`
 // slice into one affectedItem per entry, wrapping each in the
-// shared `unified.AffectedRecord` shape. The OSV affected is stored
+// shared `advisory.AffectedRecord` shape. The OSV affected is stored
 // as `any` because each ecosystem has its own concrete
 // `AffectedX` struct; downstream consumers recover the concrete type
 // via `From.Source` (the OSV ecosystem dir name) when they need
@@ -145,7 +145,7 @@ func CVEDescriptions(in []cve.Description, from unified.Provenance) []descriptio
 // compile-time-checked obligation (a record type that forgets the
 // method fails to satisfy the interface) rather than a silently
 // skipped entry in a reflection table.
-func OSVAffectedRecords(rec osv.OSVRecord, from unified.Provenance, source string) []affectedItem {
+func OSVAffectedRecords(rec osv.OSVRecord, from advisory.Provenance, source string) []affectedItem {
 	if rec == nil {
 		return nil
 	}
@@ -153,7 +153,7 @@ func OSVAffectedRecords(rec osv.OSVRecord, from unified.Provenance, source strin
 	out := make([]affectedItem, 0, len(affs))
 	for _, a := range affs {
 		out = append(out, affectedItem{
-			record: unified.AffectedRecord{From: from, OSV: a},
+			record: advisory.AffectedRecord{From: from, OSV: a},
 			source: source,
 		})
 	}
@@ -161,12 +161,12 @@ func OSVAffectedRecords(rec osv.OSVRecord, from unified.Provenance, source strin
 }
 
 // CVEAffectedRecords does the same for one CVE5 Container's affected[].
-func CVEAffectedRecords(in []cve.Affected, from unified.Provenance) []affectedItem {
+func CVEAffectedRecords(in []cve.Affected, from advisory.Provenance) []affectedItem {
 	out := make([]affectedItem, 0, len(in))
 	for i := range in {
 		aff := in[i]
 		out = append(out, affectedItem{
-			record: unified.AffectedRecord{From: from, CVE: &aff},
+			record: advisory.AffectedRecord{From: from, CVE: &aff},
 			source: SourceCVEMitre,
 		})
 	}
@@ -179,7 +179,7 @@ func CVEAffectedRecords(in []cve.Affected, from unified.Provenance) []affectedIt
 // downstream merge functions can sort CNA before its ADPs and tell them
 // apart in JSON. providerShortName falls back to the slice index when
 // the ADP omits its providerMetadata.
-func ADPProvenance(base unified.Provenance, adp cve.ADP, idx int) unified.Provenance {
+func ADPProvenance(base advisory.Provenance, adp cve.ADP, idx int) advisory.Provenance {
 	short := ""
 	if adp.ProviderMetadata != nil {
 		short = adp.ProviderMetadata.ShortName
@@ -187,5 +187,5 @@ func ADPProvenance(base unified.Provenance, adp cve.ADP, idx int) unified.Proven
 	if short == "" {
 		short = "idx" + strconv.Itoa(idx)
 	}
-	return unified.Provenance{Kind: base.Kind, Path: base.Path, ID: base.ID + "#adp:" + short}
+	return advisory.Provenance{Kind: base.Kind, Path: base.Path, ID: base.ID + "#adp:" + short}
 }

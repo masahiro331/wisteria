@@ -3,7 +3,7 @@ package unifier
 import (
 	"cmp"
 
-	"github.com/masahiro331/wisteria/internal/unified"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
 // severityItem pairs an upstream Severity with the source tag used for
@@ -11,7 +11,7 @@ import (
 // supplied by the caller so mergeSeverities stays a pure function over
 // already-tagged inputs (no Provenance.Path string parsing).
 type severityItem struct {
-	unified.Severity
+	advisory.Severity
 	source string
 }
 
@@ -24,12 +24,12 @@ type severityItem struct {
 // Within a dedup bucket the entry with the highest-priority source wins;
 // its Provenance is the one returned. Vector vs no-Vector entries with
 // the same Type are intentionally not collapsed because the keys differ.
-func mergeSeverities(in []severityItem) []unified.Severity {
+func mergeSeverities(in []severityItem) []advisory.Severity {
 	if len(in) == 0 {
 		return nil
 	}
 	type key struct{ a, b, c string }
-	makeKey := func(s unified.Severity) key {
+	makeKey := func(s advisory.Severity) key {
 		if s.Vector != "" {
 			return key{a: s.Type, b: "v", c: s.Vector}
 		}
@@ -70,7 +70,7 @@ func mergeSeverities(in []severityItem) []unified.Severity {
 			return cmp.Compare(a.Score, b.Score)
 		},
 	)
-	out := make([]unified.Severity, len(sorted))
+	out := make([]advisory.Severity, len(sorted))
 	for i, it := range sorted {
 		out[i] = it.Severity
 	}

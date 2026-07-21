@@ -15,17 +15,17 @@ import (
 	"github.com/masahiro331/wisteria/cmd"
 	"github.com/masahiro331/wisteria/cmd/debug"
 	"github.com/masahiro331/wisteria/internal/ai"
-	"github.com/masahiro331/wisteria/internal/unified"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
 type fakeSummarizer struct {
-	gotAdvisory unified.UnifiedAdvisory
+	gotAdvisory advisory.UnifiedAdvisory
 	out         *ai.AdvisoryAISummary
 	err         error
 	called      int
 }
 
-func (f *fakeSummarizer) Summarize(_ context.Context, advisory unified.UnifiedAdvisory) (*ai.AdvisoryAISummary, error) {
+func (f *fakeSummarizer) Summarize(_ context.Context, advisory advisory.UnifiedAdvisory) (*ai.AdvisoryAISummary, error) {
 	f.called++
 	f.gotAdvisory = advisory
 	if f.err != nil {
@@ -75,7 +75,7 @@ func runDebugAI(t *testing.T, fake *fakeSummarizer, args ...string) (stdout, std
 
 func writeUnifiedAdvisory(t *testing.T, cacheDir, primaryID string) {
 	t.Helper()
-	rec := unified.UnifiedAdvisory{PrimaryID: primaryID}
+	rec := advisory.UnifiedAdvisory{PrimaryID: primaryID}
 	body, err := json.MarshalIndent(rec, "", "  ")
 	if err != nil {
 		t.Fatal(err)
@@ -94,7 +94,7 @@ func writeUnifiedAdvisory(t *testing.T, cacheDir, primaryID string) {
 
 func TestDebugAI_Stdin_PrintsSummary(t *testing.T) {
 	fake := &fakeSummarizer{out: sampleSummary()}
-	advisory := unified.UnifiedAdvisory{PrimaryID: "CVE-2024-0001"}
+	advisory := advisory.UnifiedAdvisory{PrimaryID: "CVE-2024-0001"}
 	body, err := json.Marshal(advisory)
 	if err != nil {
 		t.Fatal(err)
@@ -174,7 +174,7 @@ func TestDebugAI_RequiresExactlyOneInputMode(t *testing.T) {
 
 func TestDebugAI_PropagatesSummarizerError(t *testing.T) {
 	fake := &fakeSummarizer{err: errors.New("boom")}
-	advisory := unified.UnifiedAdvisory{PrimaryID: "CVE-2024-0001"}
+	advisory := advisory.UnifiedAdvisory{PrimaryID: "CVE-2024-0001"}
 	body, _ := json.Marshal(advisory)
 
 	withStdin(t, body, func() {
@@ -226,7 +226,7 @@ func runDebugAIWithFactory(t *testing.T, factory debug.AIFactory, args ...string
 }
 
 func TestDebugAI_UnknownProviderRejected(t *testing.T) {
-	advisory := unified.UnifiedAdvisory{PrimaryID: "CVE-2024-0001"}
+	advisory := advisory.UnifiedAdvisory{PrimaryID: "CVE-2024-0001"}
 	body, _ := json.Marshal(advisory)
 
 	withStdin(t, body, func() {
@@ -243,7 +243,7 @@ func TestDebugAI_UnknownProviderRejected(t *testing.T) {
 }
 
 func TestDebugAI_ThinkFlagReachesOptions(t *testing.T) {
-	advisory := unified.UnifiedAdvisory{PrimaryID: "CVE-2024-0001"}
+	advisory := advisory.UnifiedAdvisory{PrimaryID: "CVE-2024-0001"}
 	body, _ := json.Marshal(advisory)
 
 	var captured debug.AISummarizeOptions
@@ -271,7 +271,7 @@ func (erroringWriter) Write(_ []byte) (int, error) {
 }
 
 func TestDebugAI_StdoutEncodeErrorSurfaces(t *testing.T) {
-	advisory := unified.UnifiedAdvisory{PrimaryID: "CVE-2024-0001"}
+	advisory := advisory.UnifiedAdvisory{PrimaryID: "CVE-2024-0001"}
 	body, _ := json.Marshal(advisory)
 
 	fake := &fakeSummarizer{out: sampleSummary()}

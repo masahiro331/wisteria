@@ -47,10 +47,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/masahiro331/wisteria/internal/unified/cve"
 	"github.com/masahiro331/wisteria/internal/unified/kev"
 	"github.com/masahiro331/wisteria/internal/unified/osv"
 	"github.com/masahiro331/wisteria/internal/unified/osv/ecosystem"
+	"github.com/masahiro331/wisteria/pkg/advisory/cve"
 )
 
 func main() {

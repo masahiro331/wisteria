@@ -9,6 +9,7 @@ import (
 
 	"github.com/masahiro331/wisteria/internal/unified"
 	"github.com/masahiro331/wisteria/internal/unified/walker"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
 // writeFile is a tiny test helper that creates parent dirs and writes
@@ -38,7 +39,7 @@ func TestIndex(t *testing.T) {
 			},
 			want: map[string][]entryWant{
 				"CVE-2024-0001": {
-					{kind: unified.SourceOSV, source: "PyPI", sourceID: "PYSEC-2024-1", relPath: "osv/PyPI/PYSEC-2024-1.json"},
+					{kind: advisory.SourceOSV, source: "PyPI", sourceID: "PYSEC-2024-1", relPath: "osv/PyPI/PYSEC-2024-1.json"},
 				},
 			},
 		},
@@ -49,10 +50,10 @@ func TestIndex(t *testing.T) {
 			},
 			want: map[string][]entryWant{
 				"CVE-2024-0002": {
-					{kind: unified.SourceOSV, source: "PyPI", sourceID: "PYSEC-2024-2", relPath: "osv/PyPI/PYSEC-2024-2.json"},
+					{kind: advisory.SourceOSV, source: "PyPI", sourceID: "PYSEC-2024-2", relPath: "osv/PyPI/PYSEC-2024-2.json"},
 				},
 				"CVE-2024-0003": {
-					{kind: unified.SourceOSV, source: "PyPI", sourceID: "PYSEC-2024-2", relPath: "osv/PyPI/PYSEC-2024-2.json"},
+					{kind: advisory.SourceOSV, source: "PyPI", sourceID: "PYSEC-2024-2", relPath: "osv/PyPI/PYSEC-2024-2.json"},
 				},
 			},
 		},
@@ -64,10 +65,10 @@ func TestIndex(t *testing.T) {
 			},
 			want: map[string][]entryWant{
 				"ALBA-2019:0973": {
-					{kind: unified.SourceOSV, source: "AlmaLinux", sourceID: "ALBA-2019:0973", relPath: "osv/AlmaLinux/ALBA-2019:0973.json"},
+					{kind: advisory.SourceOSV, source: "AlmaLinux", sourceID: "ALBA-2019:0973", relPath: "osv/AlmaLinux/ALBA-2019:0973.json"},
 				},
 				"GO-2024-1234": {
-					{kind: unified.SourceOSV, source: "Go", sourceID: "GO-2024-1234", relPath: "osv/Go/GO-2024-1234.json"},
+					{kind: advisory.SourceOSV, source: "Go", sourceID: "GO-2024-1234", relPath: "osv/Go/GO-2024-1234.json"},
 				},
 			},
 		},
@@ -78,7 +79,7 @@ func TestIndex(t *testing.T) {
 			},
 			want: map[string][]entryWant{
 				"CVE-2024-0001": {
-					{kind: unified.SourceCVE, source: "", sourceID: "CVE-2024-0001", relPath: "cve/cvelistV5-main/cves/2024/0xxx/CVE-2024-0001.json"},
+					{kind: advisory.SourceCVE, source: "", sourceID: "CVE-2024-0001", relPath: "cve/cvelistV5-main/cves/2024/0xxx/CVE-2024-0001.json"},
 				},
 			},
 		},
@@ -90,8 +91,8 @@ func TestIndex(t *testing.T) {
 			},
 			want: map[string][]entryWant{
 				"CVE-2024-9999": {
-					{kind: unified.SourceOSV, source: "PyPI", sourceID: "PYSEC-2024-9", relPath: "osv/PyPI/PYSEC-2024-9.json"},
-					{kind: unified.SourceCVE, source: "", sourceID: "CVE-2024-9999", relPath: "cve/cvelistV5-main/cves/2024/9xxx/CVE-2024-9999.json"},
+					{kind: advisory.SourceOSV, source: "PyPI", sourceID: "PYSEC-2024-9", relPath: "osv/PyPI/PYSEC-2024-9.json"},
+					{kind: advisory.SourceCVE, source: "", sourceID: "CVE-2024-9999", relPath: "cve/cvelistV5-main/cves/2024/9xxx/CVE-2024-9999.json"},
 				},
 			},
 		},
@@ -102,7 +103,7 @@ func TestIndex(t *testing.T) {
 			},
 			want: map[string][]entryWant{
 				"RLSA-2024-1": {
-					{kind: unified.SourceOSV, source: "Rocky_Linux", sourceID: "RLSA-2024-1", relPath: "osv/Rocky Linux/RLSA-2024-1.json"},
+					{kind: advisory.SourceOSV, source: "Rocky_Linux", sourceID: "RLSA-2024-1", relPath: "osv/Rocky Linux/RLSA-2024-1.json"},
 				},
 			},
 		},
@@ -319,7 +320,7 @@ func signatures(entries []unified.IndexEntry) []string {
 }
 
 type entryWant struct {
-	kind     unified.SourceKind
+	kind     advisory.SourceKind
 	source   string
 	sourceID string
 	relPath  string

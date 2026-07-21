@@ -4,14 +4,14 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/masahiro331/wisteria/internal/unified"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
 func TestMergeReferences(t *testing.T) {
 	tests := []struct {
 		name string
-		in   []unified.Reference
-		want []unified.Reference
+		in   []advisory.Reference
+		want []advisory.Reference
 	}{
 		{
 			name: "empty input returns nil",
@@ -20,40 +20,40 @@ func TestMergeReferences(t *testing.T) {
 		},
 		{
 			name: "single ref kept as-is after normalize",
-			in: []unified.Reference{
+			in: []advisory.Reference{
 				{URL: "https://example.com/a"},
 			},
-			want: []unified.Reference{
+			want: []advisory.Reference{
 				{URL: "https://example.com/a"},
 			},
 		},
 		{
 			name: "scheme and host lowercased, trailing slash stripped, fragment dropped",
-			in: []unified.Reference{
+			in: []advisory.Reference{
 				{URL: "HTTPS://Example.COM/Path/#frag"},
 			},
-			want: []unified.Reference{
+			want: []advisory.Reference{
 				{URL: "https://example.com/Path"},
 			},
 		},
 		{
 			name: "duplicate URLs after normalization collapse, tags unioned and sorted",
-			in: []unified.Reference{
+			in: []advisory.Reference{
 				{URL: "https://example.com/a", Tags: []string{"FIX", "WEB"}},
 				{URL: "HTTPS://example.com/a/", Tags: []string{"WEB", "ADVISORY"}},
 			},
-			want: []unified.Reference{
+			want: []advisory.Reference{
 				{URL: "https://example.com/a", Tags: []string{"ADVISORY", "FIX", "WEB"}},
 			},
 		},
 		{
 			name: "lex sort by normalized URL",
-			in: []unified.Reference{
+			in: []advisory.Reference{
 				{URL: "https://z.example.com/"},
 				{URL: "https://a.example.com/"},
 				{URL: "https://m.example.com/"},
 			},
-			want: []unified.Reference{
+			want: []advisory.Reference{
 				{URL: "https://a.example.com"},
 				{URL: "https://m.example.com"},
 				{URL: "https://z.example.com"},
@@ -61,47 +61,47 @@ func TestMergeReferences(t *testing.T) {
 		},
 		{
 			name: "tags dedup keeps single copy",
-			in: []unified.Reference{
+			in: []advisory.Reference{
 				{URL: "https://example.com/a", Tags: []string{"FIX", "FIX"}},
 			},
-			want: []unified.Reference{
+			want: []advisory.Reference{
 				{URL: "https://example.com/a", Tags: []string{"FIX"}},
 			},
 		},
 		{
 			name: "no tags stays nil after merge",
-			in: []unified.Reference{
+			in: []advisory.Reference{
 				{URL: "https://example.com/a"},
 				{URL: "https://example.com/a"},
 			},
-			want: []unified.Reference{
+			want: []advisory.Reference{
 				{URL: "https://example.com/a"},
 			},
 		},
 		{
 			name: "malformed URL passes through unchanged",
-			in: []unified.Reference{
+			in: []advisory.Reference{
 				{URL: "not a url"},
 			},
-			want: []unified.Reference{
+			want: []advisory.Reference{
 				{URL: "not a url"},
 			},
 		},
 		{
 			name: "root trailing slash also stripped",
-			in: []unified.Reference{
+			in: []advisory.Reference{
 				{URL: "https://example.com/"},
 			},
-			want: []unified.Reference{
+			want: []advisory.Reference{
 				{URL: "https://example.com"},
 			},
 		},
 		{
 			name: "percent-encoded path byte %2F preserved when trailing slash stripped",
-			in: []unified.Reference{
+			in: []advisory.Reference{
 				{URL: "https://example.com/a%2Fb/"},
 			},
-			want: []unified.Reference{
+			want: []advisory.Reference{
 				{URL: "https://example.com/a%2Fb"},
 			},
 		},

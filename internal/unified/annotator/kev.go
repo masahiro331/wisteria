@@ -22,9 +22,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/masahiro331/wisteria/internal/unified"
 	"github.com/masahiro331/wisteria/internal/unified/kev"
 	"github.com/masahiro331/wisteria/internal/unified/writer"
+	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
 const kevCatalogRelPath = "kev/known_exploited_vulnerabilities.json"
@@ -80,10 +80,10 @@ func applyKEVEntry(outDir, catalogRelPath string, v kev.Vulnerability) error {
 // Provenance.Path uses the catalog's path relative to sourcesRoot — same
 // convention as walker.IndexEntry.Path — so debug tooling can resolve
 // any KEV field back to its source row.
-func kevRecord(catalogRelPath string, v kev.Vulnerability) *unified.KEVRecord {
-	rec := &unified.KEVRecord{
-		From: unified.Provenance{
-			Kind: unified.SourceKEV,
+func kevRecord(catalogRelPath string, v kev.Vulnerability) *advisory.KEVRecord {
+	rec := &advisory.KEVRecord{
+		From: advisory.Provenance{
+			Kind: advisory.SourceKEV,
 			Path: catalogRelPath,
 			ID:   v.CVEID,
 		},
