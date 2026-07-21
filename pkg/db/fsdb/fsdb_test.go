@@ -8,12 +8,22 @@ import (
 	"testing"
 
 	"github.com/masahiro331/wisteria/internal/unified/indexer"
+	"github.com/masahiro331/wisteria/internal/unified/osv"
+	"github.com/masahiro331/wisteria/internal/unified/osv/ecosystem"
 	"github.com/masahiro331/wisteria/internal/unified/writer"
 	"github.com/masahiro331/wisteria/pkg/advisory"
-	"github.com/masahiro331/wisteria/pkg/advisory/osv"
 	"github.com/masahiro331/wisteria/pkg/db"
 	"github.com/masahiro331/wisteria/pkg/db/fsdb"
 )
+
+// osvAffected boxes one (ecosystem, name) pair the way the pipeline
+// stores it: a concrete per-ecosystem *AffectedX. The concrete type is
+// arbitrary — the indexer only reads the embedded osv.AffectedBase.
+func osvAffected(eco, name string) any {
+	return &ecosystem.AffectedPyPI{
+		AffectedBase: osv.AffectedBase{Package: &osv.Package{Ecosystem: eco, Name: name}},
+	}
+}
 
 func fixtureRecords() []advisory.UnifiedAdvisory {
 	return []advisory.UnifiedAdvisory{
@@ -25,7 +35,7 @@ func fixtureRecords() []advisory.UnifiedAdvisory {
 			},
 			Affected: []advisory.AffectedRecord{{
 				From: advisory.Provenance{Kind: advisory.SourceOSV, Path: "osv/PyPI/x.json", ID: "PYSEC-2024-1"},
-				OSV:  &osv.Affected{Package: osv.Package{Ecosystem: "PyPI", Name: "django"}},
+				OSV:  osvAffected("PyPI", "django"),
 			}},
 		},
 		{
@@ -42,7 +52,7 @@ func fixtureRecords() []advisory.UnifiedAdvisory {
 			},
 			Affected: []advisory.AffectedRecord{{
 				From: advisory.Provenance{Kind: advisory.SourceOSV, Path: "osv/Go/GO-2024-1234.json", ID: "GO-2024-1234"},
-				OSV:  &osv.Affected{Package: osv.Package{Ecosystem: "Go", Name: "github.com/foo/bar"}},
+				OSV:  osvAffected("Go", "github.com/foo/bar"),
 			}},
 		},
 	}
