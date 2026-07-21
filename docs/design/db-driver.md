@@ -24,7 +24,6 @@
 
 ```
 pkg/advisory/          ← UnifiedAdvisory + リーフ型 (internal/unified から移動)
-pkg/advisory/osv/      ← OSV スキーマ型 (internal/unified/osv から移動)
 pkg/advisory/cve/      ← CVE5 スキーマ型 (internal/unified/cve から移動)
 pkg/db/                ← Driver interface / Register / Open / sentinel error
 pkg/db/fsdb/           ← ファイルシステムドライバ (scheme "fs")
@@ -39,7 +38,7 @@ internal/unified/indexer/ ← Stage 5: 索引生成 (パイプライン内部)
 
 `IndexEntry` は Stage 1 の中間データなので `internal/unified` に残す (`pkg/advisory` を import する)。
 
-`AffectedRecord` が `*osv.Affected` / `*cve.Affected` を参照するため、`internal/unified/osv` と `internal/unified/cve` はパッケージごと `pkg/advisory/osv` / `pkg/advisory/cve` へ移動する。`kev` / `epss` / `exploitdb` のパーサ型は `UnifiedAdvisory` から参照されないので internal のまま。
+`AffectedRecord` が `*cve.Affected` を参照するため、`internal/unified/cve` はパッケージごと `pkg/advisory/cve` へ移動する。`AffectedRecord.OSV` は per-ecosystem 型リファクタ (#93) 以降 `any` であり osv 型を参照しないため、`internal/unified/osv` (と `ecosystem` サブパッケージ) は internal のまま。外部利用者は JSON デコード後の `map[string]any` として OSV affected を読む。`kev` / `epss` / `exploitdb` のパーサ型も `UnifiedAdvisory` から参照されないので internal のまま。
 
 既存ステージ (walker / unifier / writer / annotator / pipeline) と `tools/schema-coverage` は import パスの書き換えのみの機械的リファクタで追従する。
 
