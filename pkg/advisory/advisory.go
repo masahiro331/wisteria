@@ -4,15 +4,14 @@
 // Exploit-DB signal types, and the UnifiedAdvisory record that the
 // pipeline emits and pkg/db drivers return.
 //
-// Per-source raw schemas that UnifiedAdvisory embeds live in the osv and
-// cve subpackages. This package intentionally has no behavior — only
+// The CVE5 raw schema that UnifiedAdvisory embeds lives in the cve
+// subpackage. This package intentionally has no behavior — only
 // types — so both the internal pipeline stages and external consumers
 // can depend on it without picking up unrelated transitive deps.
 package advisory
 
 import (
 	"github.com/masahiro331/wisteria/pkg/advisory/cve"
-	"github.com/masahiro331/wisteria/pkg/advisory/osv"
 )
 
 // SourceKind identifies which upstream catalog a record came from.
@@ -64,9 +63,13 @@ type Severity struct {
 // We do not try to reconcile OSV ranges against CVE5 platform/version
 // shapes here — the typed source struct is preserved so downstream stages
 // (Phase 2 / Phase 3) can decide.
+//
+// OSV is `any` because each ecosystem has its own concrete `osv.AffectedX`
+// type; downstream consumers type-switch on the wrapping `Provenance`'s
+// Source to recover the concrete shape.
 type AffectedRecord struct {
 	From Provenance    `json:"from"`
-	OSV  *osv.Affected `json:"osv,omitempty"`
+	OSV  any           `json:"osv,omitempty"`
 	CVE  *cve.Affected `json:"cve,omitempty"`
 }
 

@@ -4,9 +4,10 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/masahiro331/wisteria/internal/unified/osv"
+	"github.com/masahiro331/wisteria/internal/unified/osv/ecosystem"
 	"github.com/masahiro331/wisteria/pkg/advisory"
 	"github.com/masahiro331/wisteria/pkg/advisory/cve"
-	"github.com/masahiro331/wisteria/pkg/advisory/osv"
 )
 
 func TestMergeAffected(t *testing.T) {
@@ -14,8 +15,10 @@ func TestMergeAffected(t *testing.T) {
 	provAlma := advisory.Provenance{Kind: advisory.SourceOSV, Path: "osv/AlmaLinux/ALSA-1.json", ID: "ALSA-1"}
 	provGit := advisory.Provenance{Kind: advisory.SourceOSV, Path: "osv/GitHub Reviewed/GHSA-1.json", ID: "GHSA-1"}
 
-	osvAff := func(name string) *osv.Affected {
-		return &osv.Affected{Package: osv.Package{Name: name, Ecosystem: "PyPI"}}
+	osvAff := func(name string) *ecosystem.AffectedAlmaLinux {
+		return &ecosystem.AffectedAlmaLinux{
+			AffectedBase: osv.AffectedBase{Package: &osv.Package{Name: name, Ecosystem: "AlmaLinux"}},
+		}
 	}
 	cveAff := func(product string) *cve.Affected {
 		return &cve.Affected{Vendor: "acme", Product: product}
