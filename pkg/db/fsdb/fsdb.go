@@ -26,11 +26,10 @@ import (
 	"io/fs"
 	"net/url"
 	"os"
-	"path"
-	"regexp"
 	"sync"
 
 	"github.com/masahiro331/wisteria/internal/unified/indexer"
+	"github.com/masahiro331/wisteria/internal/unified/writer"
 	"github.com/masahiro331/wisteria/pkg/advisory"
 	"github.com/masahiro331/wisteria/pkg/db"
 )
@@ -40,10 +39,6 @@ func init() {
 		return openDSN(dsn)
 	})
 }
-
-// cveIDPattern mirrors the Stage 3 writer routing: CVE-YYYY-NNNN ids
-// live at cve/<year>/<id>.json. Used only by the index-less fallback.
-var cveIDPattern = regexp.MustCompile(`^CVE-(\d{4})-\d+$`)
 
 // errNoIndex explains how to make alias / package lookups work on a
 // tree that predates Stage 5.
@@ -189,13 +184,14 @@ func (d *Driver) ensureIndex() (bool, error) {
 }
 
 // findWithoutIndex serves trees that predate Stage 5: CVE-shaped ids
-// have a computable path, everything else needs the index.
+// have a computable path (writer.CVERelPath, the Stage 3 routing rule),
+// everything else needs the index.
 func (d *Driver) findWithoutIndex(id string) ([]advisory.UnifiedAdvisory, error) {
-	m := cveIDPattern.FindStringSubmatch(id)
-	if m == nil {
+	rel, ok := writer.CVERelPath(id)
+	if !ok {
 		return nil, fmt.Errorf("fsdb: id %q: %w", id, errNoIndex)
 	}
-	rec, err := d.load(path.Join("cve", m[1], id+".json"))
+	rec, err := d.load(rel)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("fsdb: id %q: %w", id, db.ErrNotFound)
 	}

@@ -43,6 +43,7 @@ import (
 	"sync"
 
 	"github.com/masahiro331/wisteria/internal/unified/unifier"
+	"github.com/masahiro331/wisteria/internal/x/atomicfile"
 	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
@@ -134,16 +135,29 @@ func Reset(cacheDir string) (string, error) {
 	return outDir, nil
 }
 
+// CVERelPath returns the outDir-relative, slash-separated path a
+// CVE-YYYY-NNNN PrimaryID routes to (cve/<year>/<id>.json). (_, false)
+// means the ID is not CVE-shaped. This is the single definition of the
+// year-bucket rule — CVEPath, RelPath, and pkg/db/fsdb's index-less
+// fallback all derive from it.
+func CVERelPath(cveID string) (string, bool) {
+	m := cveIDPattern.FindStringSubmatch(cveID)
+	if m == nil {
+		return "", false
+	}
+	return path.Join(cveBucket, m[1], cveID+".json"), true
+}
+
 // CVEPath returns the per-record unified path for a CVE-ID under outDir,
 // matching the routing Write applies. (_, false) means the ID is not a
 // CVE-YYYY-NNNN that Stage 3 routes to cve/<year>/. Annotator and debug
 // tools use this so the year-bucket policy stays defined in one place.
 func CVEPath(outDir, cveID string) (string, bool) {
-	m := cveIDPattern.FindStringSubmatch(cveID)
-	if m == nil {
+	rel, ok := CVERelPath(cveID)
+	if !ok {
 		return "", false
 	}
-	return filepath.Join(outDir, cveBucket, m[1], cveID+".json"), true
+	return filepath.Join(outDir, filepath.FromSlash(rel)), true
 }
 
 // RelPath returns the outDir-relative, slash-separated path Write uses
@@ -152,8 +166,8 @@ func CVEPath(outDir, cveID string) (string, bool) {
 // this value verbatim in index entries, so it is the single source of
 // truth for record routing — bucketPath below derives from it.
 func RelPath(rec advisory.UnifiedAdvisory) (string, error) {
-	if m := cveIDPattern.FindStringSubmatch(rec.PrimaryID); m != nil {
-		return path.Join(cveBucket, m[1], rec.PrimaryID+".json"), nil
+	if rel, ok := CVERelPath(rec.PrimaryID); ok {
+		return rel, nil
 	}
 	eco, err := primaryEcosystem(rec.Provenances)
 	if err != nil {
@@ -178,24 +192,7 @@ func Write(outDir string, rec advisory.UnifiedAdvisory) error {
 	if err != nil {
 		return fmt.Errorf("writer: marshal %s: %w", rec.PrimaryID, err)
 	}
-	final := filepath.Join(dir, file)
-	tmp, err := os.CreateTemp(dir, ".write-*")
-	if err != nil {
-		return fmt.Errorf("writer: temp file in %s: %w", dir, err)
-	}
-	tmpName := tmp.Name()
-	defer func() { _ = os.Remove(tmpName) }()
-	if _, err := tmp.Write(body); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("writer: write %s: %w", tmpName, err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("writer: close %s: %w", tmpName, err)
-	}
-	if err := os.Rename(tmpName, final); err != nil {
-		return fmt.Errorf("writer: rename %s -> %s: %w", tmpName, final, err)
-	}
-	return nil
+	return atomicfile.Write(filepath.Join(dir, file), body)
 }
 
 func ensureDir(dir string) error {
