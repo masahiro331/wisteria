@@ -252,6 +252,13 @@ type AffectedBase struct {
 	Versions []string   `json:"versions,omitempty"`
 }
 
+// Base returns the embedded AffectedBase. It is promoted into every
+// per-ecosystem `*AffectedX`, so callers holding an affected entry as
+// `any` (advisory.AffectedRecord.OSV) can reach the shared fields via a
+// single interface assertion instead of a 45-type switch — the same
+// role OSVRecord.Base plays for records.
+func (a *AffectedBase) Base() *AffectedBase { return a }
+
 // RangeBase carries the OSV `affected[].ranges[]` fields shared across
 // every ecosystem. Per-ecosystem `RangeX` types embed it and add the
 // ecosystem-specific `database_specific`.

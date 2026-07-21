@@ -265,5 +265,60 @@ func TestInit_ResetsBucketCacheAcrossRuns(t *testing.T) {
 	}
 }
 
+// TestRelPath pins the outDir-relative routing rule that Stage 5
+// (indexer) stores verbatim in index entries: it must match exactly
+// where Write puts each record, or index lookups dangle.
+func TestRelPath(t *testing.T) {
+	tests := []struct {
+		name string
+		rec  advisory.UnifiedAdvisory
+		want string
+	}{
+		{
+			name: "cve routes to year bucket",
+			rec:  cveAdvisory("CVE-2024-0001", ""),
+			want: "cve/2024/CVE-2024-0001.json",
+		},
+		{
+			name: "standalone routes to ecosystem bucket with filename escape",
+			rec:  standaloneAdvisory("ALBA-2019:0973", "AlmaLinux"),
+			want: "standalone/AlmaLinux/ALBA-2019_0973.json",
+		},
+		{
+			name: "standalone normalizes ecosystem spaces",
+			rec: advisory.UnifiedAdvisory{
+				PrimaryID: "RHSA-2024-1",
+				Provenances: []advisory.Provenance{
+					{Kind: advisory.SourceOSV, Path: "osv/Red Hat/RHSA-2024-1.json", ID: "RHSA-2024-1"},
+				},
+			},
+			want: "standalone/Red_Hat/RHSA-2024-1.json",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := writer.RelPath(tc.rec)
+			if err != nil {
+				t.Fatalf("RelPath: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("RelPath = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRelPath_StandaloneWithoutOSVProvenanceErrors(t *testing.T) {
+	rec := advisory.UnifiedAdvisory{
+		PrimaryID: "GHSA-aaaa-bbbb-cccc",
+		Provenances: []advisory.Provenance{
+			{Kind: advisory.SourceCVE, Path: "cve/x.json", ID: "GHSA-aaaa-bbbb-cccc"},
+		},
+	}
+	if _, err := writer.RelPath(rec); err == nil {
+		t.Fatal("expected error: standalone advisory needs an OSV provenance")
+	}
+}
+
 // keep context import live in case future tests need it
 var _ = context.Background
