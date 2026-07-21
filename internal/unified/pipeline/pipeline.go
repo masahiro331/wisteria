@@ -1,7 +1,9 @@
 // Package pipeline orchestrates the full unified-advisory build:
 // Stage 1 (walker.Index) → Stage 2 (unifier.MergePrimary, fanned out per
 // PrimaryID) → Stage 3 (writer.Write per record, streaming) → Stage 4
-// (annotator.RunAll). It exists so cmd/unify can stay a thin Cobra
+// (annotator.RunAll) → Stage 5 (indexer.Write, flushing the lookup
+// index collected during the Stage 2+3 fan-out).
+// It exists so cmd/unify can stay a thin Cobra
 // shell that only owns flag parsing and pprof; everything else
 // (concurrency, fan-out, error policy, per-stage timing) lives here
 // where it can be tested without spinning up a Cobra command.
@@ -22,6 +24,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/masahiro331/wisteria/internal/unified/annotator"
+	"github.com/masahiro331/wisteria/internal/unified/indexer"
 	"github.com/masahiro331/wisteria/internal/unified/unifier"
 	"github.com/masahiro331/wisteria/internal/unified/walker"
 	"github.com/masahiro331/wisteria/internal/unified/writer"
@@ -39,7 +42,7 @@ type Options struct {
 	Concurrency int
 }
 
-// Run executes Stages 1-4 against cacheDir. cacheDir is the override
+// Run executes Stages 1-5 against cacheDir. cacheDir is the override
 // passed to cachedir.Root — empty means "resolve the default" ($HOME
 // based, env-var aware). w receives per-stage timing lines; pass nil
 // to suppress.
@@ -47,7 +50,7 @@ type Options struct {
 // Errors abort the pipeline at the first failure. Stage 1 errors are
 // returned as-is from walker.Index; Stage 2+3 errors carry the
 // PrimaryID; Stage 4 errors carry the annotator name (kev / epss /
-// exploitdb).
+// exploitdb); Stage 5 errors carry the indexer prefix.
 func Run(ctx context.Context, cacheDir string, opts Options, w io.Writer) error {
 	conc := opts.Concurrency
 	if conc <= 0 {
@@ -78,7 +81,10 @@ func Run(ctx context.Context, cacheDir string, opts Options, w io.Writer) error 
 
 	// Stages 2+3 fused: merge → write per PrimaryID. Memory resident is
 	// bounded by the worker pool (≈ conc records in flight), not by
-	// total record count.
+	// total record count. Each written record is also fed to the Stage 5
+	// collector — only ID / package strings are retained, so this does
+	// not grow the resident set with record bodies.
+	idx := indexer.New()
 	t1 := time.Now()
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(conc)
@@ -88,7 +94,10 @@ func Run(ctx context.Context, cacheDir string, opts Options, w io.Writer) error 
 			if err != nil {
 				return fmt.Errorf("merge %s: %w", id, err)
 			}
-			return writer.Write(outDir, rec)
+			if err := writer.Write(outDir, rec); err != nil {
+				return err
+			}
+			return idx.Collect(rec)
 		})
 	}
 	if err := g.Wait(); err != nil {
@@ -104,6 +113,15 @@ func Run(ctx context.Context, cacheDir string, opts Options, w io.Writer) error 
 	if err := annotator.RunAll(ctx, sourcesRoot, outDir, w, "stage 4 "); err != nil {
 		return err
 	}
+
+	// Stage 5: flush the lookup index collected during Stage 2+3 so
+	// pkg/db drivers can resolve IDs and packages in O(1).
+	t2 := time.Now()
+	if err := idx.Write(outDir); err != nil {
+		return fmt.Errorf("indexer.Write: %w", err)
+	}
+	logf(w, "stage 5 (index):         %s\n",
+		time.Since(t2).Round(time.Millisecond))
 
 	logf(w, "total: %s; wrote %d advisories to %s\n",
 		time.Since(t0).Round(time.Millisecond), len(index), outDir)

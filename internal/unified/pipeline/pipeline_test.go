@@ -34,7 +34,8 @@ func pipelineFixture(t *testing.T) string {
 	cacheDir := t.TempDir()
 	src := filepath.Join(cacheDir, "sources")
 	writeFile(t, src, "osv/PyPI/PYSEC-2024-1.json",
-		`{"id":"PYSEC-2024-1","aliases":["CVE-2024-0001"],"summary":"Python advisory"}`)
+		`{"id":"PYSEC-2024-1","aliases":["CVE-2024-0001"],"summary":"Python advisory",`+
+			`"affected":[{"package":{"ecosystem":"PyPI","name":"dask"}}]}`)
 	writeFile(t, src, "cve/cvelistV5-main/cves/2024/0xxx/CVE-2024-0001.json",
 		`{"cveMetadata":{"cveId":"CVE-2024-0001"},"containers":{"cna":{"descriptions":[{"lang":"en","value":"CNA"}]}}}`)
 	writeFile(t, src, "osv/Go/GO-2024-1234.json",
@@ -79,9 +80,22 @@ func TestRun_WritesBothBucketsAndAnnotates(t *testing.T) {
 		t.Errorf("KEV not applied to unified file:\n%s", body)
 	}
 
+	// Stage 5 must leave a lookup index next to the record buckets so
+	// pkg/db drivers can resolve aliases and packages without scanning.
+	for _, rel := range []string{
+		filepath.Join("index", "meta.json"),
+		filepath.Join("index", "ids", "PYSEC-2024-1.json"),
+		filepath.Join("index", "packages", "PyPI", "dask.json"),
+	} {
+		p := filepath.Join(cacheDir, "unified", rel)
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("expected index file %s: %v", p, err)
+		}
+	}
+
 	// Stage progress lines must appear so the user sees what happened.
 	out := buf.String()
-	for _, want := range []string{"stage 1", "stage 2+3", "annotate"} {
+	for _, want := range []string{"stage 1", "stage 2+3", "annotate", "stage 5"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("pipeline output missing %q line; got:\n%s", want, out)
 		}
