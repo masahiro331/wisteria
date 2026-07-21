@@ -26,6 +26,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/masahiro331/wisteria/internal/unified/osv"
 	"github.com/masahiro331/wisteria/internal/unified/writer"
 	"github.com/masahiro331/wisteria/pkg/advisory"
 )
@@ -117,16 +118,37 @@ func (ix *Indexer) Collect(rec advisory.UnifiedAdvisory) error {
 		ix.addID(id, ref)
 	}
 	for _, a := range rec.Affected {
-		if a.OSV == nil || a.OSV.Package.Ecosystem == "" || a.OSV.Package.Name == "" {
+		pkg := affectedPackage(a.OSV)
+		if pkg == nil || pkg.Ecosystem == "" || pkg.Name == "" {
 			continue
 		}
-		key := pkgKey{ecosystem: a.OSV.Package.Ecosystem, name: a.OSV.Package.Name}
+		key := pkgKey{ecosystem: pkg.Ecosystem, name: pkg.Name}
 		if ix.pkgs[key] == nil {
 			ix.pkgs[key] = map[string]RecordRef{}
 		}
 		ix.pkgs[key][rec.PrimaryID] = ref
 	}
 	return nil
+}
+
+// osvAffected is the slice of the per-ecosystem `*osv.AffectedX` types
+// the indexer needs. Every AffectedX embeds osv.AffectedBase, so the
+// assertion holds for all ecosystems without naming any of them.
+type osvAffected interface {
+	Base() *osv.AffectedBase
+}
+
+// affectedPackage extracts the OSV package identity from one
+// AffectedRecord.OSV value. nil means "not indexable": a CVE-only
+// affected entry, a package-less record (Debian / GIT), or a value that
+// is not a live per-ecosystem type (e.g. a record decoded back from
+// JSON, where OSV is a plain map).
+func affectedPackage(v any) *osv.Package {
+	a, ok := v.(osvAffected)
+	if !ok {
+		return nil
+	}
+	return a.Base().Package
 }
 
 func (ix *Indexer) addID(id string, ref RecordRef) {

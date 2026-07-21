@@ -7,11 +7,22 @@ import (
 	"testing"
 
 	"github.com/masahiro331/wisteria/internal/unified/indexer"
+	"github.com/masahiro331/wisteria/internal/unified/osv"
+	"github.com/masahiro331/wisteria/internal/unified/osv/ecosystem"
 	"github.com/masahiro331/wisteria/pkg/advisory"
-	"github.com/masahiro331/wisteria/pkg/advisory/osv"
 )
 
-func cveRec(primaryID string, sourceIDs []string, pkgs ...osv.Package) advisory.UnifiedAdvisory {
+// osvAffected wraps one (ecosystem, name) pair the way the pipeline
+// stores it: a concrete per-ecosystem *AffectedX boxed as `any`. The
+// concrete type is arbitrary — the indexer only relies on the embedded
+// osv.AffectedBase — so one type stands in for all 45.
+func osvAffected(eco, name string) any {
+	return &ecosystem.AffectedPyPI{
+		AffectedBase: osv.AffectedBase{Package: &osv.Package{Ecosystem: eco, Name: name}},
+	}
+}
+
+func cveRec(primaryID string, sourceIDs []string, pkgs ...any) advisory.UnifiedAdvisory {
 	rec := advisory.UnifiedAdvisory{
 		PrimaryID: primaryID,
 		SourceIDs: sourceIDs,
@@ -21,8 +32,8 @@ func cveRec(primaryID string, sourceIDs []string, pkgs ...osv.Package) advisory.
 	}
 	for _, p := range pkgs {
 		rec.Affected = append(rec.Affected, advisory.AffectedRecord{
-			From: advisory.Provenance{Kind: advisory.SourceOSV, Path: "osv/" + p.Ecosystem + "/x.json", ID: primaryID},
-			OSV:  &osv.Affected{Package: p},
+			From: advisory.Provenance{Kind: advisory.SourceOSV, Path: "osv/x/x.json", ID: primaryID},
+			OSV:  p,
 		})
 	}
 	return rec
@@ -108,8 +119,8 @@ func TestCollectWrite_PackageEntriesEscapeSegments(t *testing.T) {
 	outDir := t.TempDir()
 	ix := indexer.New()
 	rec := cveRec("CVE-2024-0001", nil,
-		osv.Package{Ecosystem: "PyPI", Name: "django"},
-		osv.Package{Ecosystem: "Go", Name: "github.com/foo/bar"},
+		osvAffected("PyPI", "django"),
+		osvAffected("Go", "github.com/foo/bar"),
 	)
 	if err := ix.Collect(rec); err != nil {
 		t.Fatalf("Collect: %v", err)
@@ -133,8 +144,15 @@ func TestCollect_SkipsEmptyPackageFields(t *testing.T) {
 	outDir := t.TempDir()
 	ix := indexer.New()
 	rec := cveRec("CVE-2024-0001", nil,
-		osv.Package{Ecosystem: "", Name: "orphan"},
-		osv.Package{Ecosystem: "PyPI", Name: ""},
+		osvAffected("", "orphan"),
+		osvAffected("PyPI", ""),
+		// no package at all (Debian / GIT records) — must not panic.
+		&ecosystem.AffectedPyPI{},
+		// CVE-only affected entry: OSV is nil.
+		nil,
+		// something that is not a per-ecosystem osv type at all
+		// (e.g. a record loaded back from JSON) — must be skipped.
+		map[string]any{"package": map[string]any{"ecosystem": "PyPI", "name": "x"}},
 	)
 	if err := ix.Collect(rec); err != nil {
 		t.Fatalf("Collect: %v", err)
