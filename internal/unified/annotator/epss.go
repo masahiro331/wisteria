@@ -11,7 +11,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/masahiro331/wisteria/internal/unified/epss"
-	"github.com/masahiro331/wisteria/internal/unified/writer"
 	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
@@ -57,27 +56,17 @@ func AnnotateEPSS(ctx context.Context, sourcesRoot, outDir string) error {
 // applyEPSSScore resolves the unified file for one EPSS score and, when
 // present, merges the score into it. Missing target is a silent skip.
 func applyEPSSScore(outDir, modelVersion, scoreDate string, s epss.Score) error {
-	path, ok := writer.CVEPath(outDir, s.CVE)
-	if !ok {
-		return nil
-	}
-	rec, ok, err := readUnified(path)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return nil
-	}
-	rec.EPSS = &advisory.EPSSScore{
-		From: advisory.Provenance{
-			Kind: advisory.SourceEPSS,
-			Path: epssCatalogRelPath,
-			ID:   s.CVE,
-		},
-		Score:        s.EPSS,
-		Percentile:   s.Percentile,
-		ScoreDate:    scoreDate,
-		ModelVersion: modelVersion,
-	}
-	return writeUnified(path, rec)
+	return updateCVE(outDir, s.CVE, func(rec *advisory.UnifiedAdvisory) {
+		rec.EPSS = &advisory.EPSSScore{
+			From: advisory.Provenance{
+				Kind: advisory.SourceEPSS,
+				Path: epssCatalogRelPath,
+				ID:   s.CVE,
+			},
+			Score:        s.EPSS,
+			Percentile:   s.Percentile,
+			ScoreDate:    scoreDate,
+			ModelVersion: modelVersion,
+		}
+	})
 }

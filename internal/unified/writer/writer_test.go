@@ -320,5 +320,27 @@ func TestRelPath_StandaloneWithoutOSVProvenanceErrors(t *testing.T) {
 	}
 }
 
+// TestCVERelPath pins the slash-relative CVE routing shared by RelPath,
+// CVEPath, and pkg/db/fsdb's index-less fallback.
+func TestCVERelPath(t *testing.T) {
+	tests := []struct {
+		id     string
+		want   string
+		wantOK bool
+	}{
+		{id: "CVE-2024-0001", want: "cve/2024/CVE-2024-0001.json", wantOK: true},
+		{id: "CVE-1999-123456", want: "cve/1999/CVE-1999-123456.json", wantOK: true},
+		{id: "GHSA-aaaa-bbbb-cccc", wantOK: false},
+		{id: "CVE-24-0001", wantOK: false},
+		{id: "", wantOK: false},
+	}
+	for _, tc := range tests {
+		got, ok := writer.CVERelPath(tc.id)
+		if ok != tc.wantOK || got != tc.want {
+			t.Errorf("CVERelPath(%q) = (%q, %v), want (%q, %v)", tc.id, got, ok, tc.want, tc.wantOK)
+		}
+	}
+}
+
 // keep context import live in case future tests need it
 var _ = context.Background

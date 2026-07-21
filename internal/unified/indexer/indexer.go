@@ -28,6 +28,7 @@ import (
 
 	"github.com/masahiro331/wisteria/internal/unified/osv"
 	"github.com/masahiro331/wisteria/internal/unified/writer"
+	"github.com/masahiro331/wisteria/internal/x/atomicfile"
 	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
@@ -205,8 +206,8 @@ func entryOf(refs map[string]RecordRef) Entry {
 	return e
 }
 
-// writeJSON marshals v to p atomically (temp + rename), creating the
-// parent directory on demand.
+// writeJSON marshals v to p atomically, creating the parent directory
+// on demand.
 func writeJSON(p string, v any) error {
 	dir := filepath.Dir(p)
 	if err := os.MkdirAll(dir, 0o750); err != nil {
@@ -216,21 +217,5 @@ func writeJSON(p string, v any) error {
 	if err != nil {
 		return fmt.Errorf("indexer: marshal %s: %w", p, err)
 	}
-	tmp, err := os.CreateTemp(dir, ".index-*")
-	if err != nil {
-		return fmt.Errorf("indexer: temp file in %s: %w", dir, err)
-	}
-	tmpName := tmp.Name()
-	defer func() { _ = os.Remove(tmpName) }()
-	if _, err := tmp.Write(body); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("indexer: write %s: %w", tmpName, err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("indexer: close %s: %w", tmpName, err)
-	}
-	if err := os.Rename(tmpName, p); err != nil {
-		return fmt.Errorf("indexer: rename %s -> %s: %w", tmpName, p, err)
-	}
-	return nil
+	return atomicfile.Write(p, body)
 }
