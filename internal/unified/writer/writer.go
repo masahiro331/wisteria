@@ -25,6 +25,11 @@
 //   - CVEPath(outDir, id) – resolve the per-record path for one CVE-ID,
 //     used by Stage 4 (annotator) so the year-bucket
 //     routing stays defined here.
+//   - CVERelPath(id)      – the same routing as a slash-relative path;
+//     shared with pkg/db/fsdb's index-less fallback.
+//   - RelPath(rec)        – outDir-relative slash path for one record;
+//     Stage 5 (indexer) stores it verbatim in index
+//     entries.
 //
 // Splitting Init/Reset from Write lets the production driver stream
 // merge output straight to disk (one record per goroutine) instead of
