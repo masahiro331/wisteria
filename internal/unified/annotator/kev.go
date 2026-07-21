@@ -23,7 +23,6 @@ import (
 	"path/filepath"
 
 	"github.com/masahiro331/wisteria/internal/unified/kev"
-	"github.com/masahiro331/wisteria/internal/unified/writer"
 	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
@@ -61,19 +60,9 @@ func AnnotateKEV(ctx context.Context, sourcesRoot, outDir string) error {
 // when present, merges the KEV record into it. Missing target is a
 // silent skip — see package doc.
 func applyKEVEntry(outDir, catalogRelPath string, v kev.Vulnerability) error {
-	path, ok := writer.CVEPath(outDir, v.CVEID)
-	if !ok {
-		return nil
-	}
-	rec, ok, err := readUnified(path)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return nil
-	}
-	rec.KEV = kevRecord(catalogRelPath, v)
-	return writeUnified(path, rec)
+	return updateCVE(outDir, v.CVEID, func(rec *advisory.UnifiedAdvisory) {
+		rec.KEV = kevRecord(catalogRelPath, v)
+	})
 }
 
 // kevRecord copies the upstream KEV vulnerability into the unified shape.

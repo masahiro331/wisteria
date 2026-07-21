@@ -6,8 +6,29 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/masahiro331/wisteria/internal/unified/writer"
 	"github.com/masahiro331/wisteria/pkg/advisory"
 )
+
+// updateCVE is the shared apply skeleton of every annotator: resolve
+// the unified file for one CVE-ID, load it, let mutate set the signal
+// field, and rewrite the file. A non-CVE id or a missing unified file
+// is a silent skip (see package doc) — mutate only runs on a hit.
+func updateCVE(outDir, cveID string, mutate func(*advisory.UnifiedAdvisory)) error {
+	path, ok := writer.CVEPath(outDir, cveID)
+	if !ok {
+		return nil
+	}
+	rec, ok, err := readUnified(path)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+	mutate(&rec)
+	return writeUnified(path, rec)
+}
 
 // readUnified loads one Stage 3 file. (_, false, nil) means the file is
 // absent — the caller skips. Any other I/O or decode error is returned.
