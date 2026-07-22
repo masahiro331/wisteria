@@ -10,6 +10,7 @@ const (
 	cacheDirFlag    = "cache-dir"
 	concurrencyFlag = "concurrency"
 	retriesFlag     = "retries"
+	osvExcludeFlag  = "osv-exclude"
 )
 
 // NewRootCmd builds the top-level wisteria command tree.

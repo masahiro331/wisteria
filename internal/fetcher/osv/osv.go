@@ -63,6 +63,45 @@ func WithRetries(n int) Option {
 	}
 }
 
+// WithExcludedEcosystems REPLACES the default exclusion list with the
+// given upstream ecosystem names ("[EMPTY]" for the generic bucket).
+// Pass an empty (non-nil) slice to fetch everything upstream offers.
+func WithExcludedEcosystems(names []string) Option {
+	return func(f *Fetcher) {
+		f.excluded = make(map[string]struct{}, len(names))
+		for _, n := range names {
+			f.excluded[n] = struct{}{}
+		}
+	}
+}
+
+// defaultExcludedEcosystems is the curated noise cut (issue #124):
+// the ecosystem-less conversion bucket ([EMPTY]), discontinued
+// projects (GSD, UVI),
+// container-vendor distros, and out-of-scope distros/platforms.
+// Override with --osv-exclude / WithExcludedEcosystems.
+var defaultExcludedEcosystems = []string{
+	"[EMPTY]",
+	"GSD",
+	"UVI",
+	"MinimOS",
+	"Chainguard",
+	"Wolfi",
+	"Root",
+	"Alpaquita",
+	"Azure Linux",
+	"Bitnami",
+	"Echo",
+	"TuxCare",
+	"CleanStart",
+	"BellSoft Hardened Containers",
+	"SUSE",
+	"openSUSE",
+	"Mageia",
+	"openEuler",
+	"Android",
+}
+
 // Fetcher downloads OSV per-ecosystem archives.
 type Fetcher struct {
 	baseURL     string
@@ -71,6 +110,7 @@ type Fetcher struct {
 	progress    *progress.Tracker
 	concurrency int
 	retry       xhttp.RetryOptions
+	excluded    map[string]struct{}
 }
 
 // New constructs a Fetcher with optional overrides.
@@ -80,10 +120,27 @@ func New(opts ...Option) *Fetcher {
 		client:      http.DefaultClient,
 		concurrency: defaultConcurrency,
 	}
+	WithExcludedEcosystems(defaultExcludedEcosystems)(f)
 	for _, opt := range opts {
 		opt(f)
 	}
 	return f
+}
+
+// excluded reports whether an upstream ecosystem line is in the
+// exclusion set. Release-qualified upstream forms ("SUSE:15") follow
+// their base name; the colon boundary keeps "SUSE" from leaking onto
+// "openSUSE".
+func excluded(set map[string]struct{}, eco string) bool {
+	if _, ok := set[eco]; ok {
+		return true
+	}
+	if base, _, found := strings.Cut(eco, ":"); found {
+		if _, ok := set[base]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // Name reports the source identifier.
@@ -105,6 +162,9 @@ func (f *Fetcher) Fetch(ctx context.Context) (string, error) {
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(f.concurrency)
 	for _, eco := range ecosystems {
+		if excluded(f.excluded, eco) {
+			continue
+		}
 		eco := eco
 		g.Go(func() error {
 			if err := f.downloadEcosystem(gctx, dir, eco); err != nil {

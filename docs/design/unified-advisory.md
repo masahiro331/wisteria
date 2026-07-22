@@ -393,6 +393,13 @@ KEV / EPSS / Exploit-DB は merge ではなく Stage 4 (Annotate, §5.2) で個�
 
 ## 9. 各 stage の I/F
 
+### 8.9 GIT (CVE→OSV 変換) の寄与制限
+
+osv.dev の `GIT` バケットは CVE の自動変換で、固有価値は **git コミット単位の introduced/fixed レンジ (affected[].ranges)** のみ。description / references / severity / cwe_ids / 日付は直接取り込んでいる CVE5 の転載なので、merge に参加させると全 CVE のテキストが二重になる。
+
+- GIT 由来のエントリは **affected と Provenance だけ** を merge する
+- fetcher の除外リストには入れない (コミットレベルのマッチングに必須)
+
 ### Stage 1: Walker
 
 ```go

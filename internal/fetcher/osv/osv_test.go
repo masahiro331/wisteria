@@ -239,7 +239,10 @@ func TestFetcher_Fetch_RenamesEMPTYEcosystemToGeneric(t *testing.T) {
 	t.Setenv("HOME", tmp)
 	t.Setenv("XDG_CACHE_HOME", tmp)
 
-	f := New(WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	// [EMPTY] is default-excluded, so the rename path only matters for
+	// callers that override the exclusion — construct one explicitly.
+	f := New(WithBaseURL(srv.URL), WithHTTPClient(srv.Client()),
+		WithExcludedEcosystems([]string{}))
 	dir, err := f.Fetch(context.Background())
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
@@ -274,4 +277,97 @@ func zipBytes(t *testing.T, entries map[string]string) []byte {
 		t.Fatalf("close zip: %v", err)
 	}
 	return buf.Bytes()
+}
+
+// TestFetcher_Fetch_SkipsDefaultExcludedEcosystems pins the curated
+// default: noise buckets (GIT / [EMPTY] / GSD / ...) are never
+// requested, so neither bandwidth nor disk is spent on them.
+func TestFetcher_Fetch_SkipsDefaultExcludedEcosystems(t *testing.T) {
+	var excludedRequested atomic.Bool
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ecosystems.txt", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("PyPI\nGSD\nSUSE\n[EMPTY]\n"))
+	})
+	mux.HandleFunc("/PyPI/all.zip", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(zipBytes(t, map[string]string{"PYSEC-1.json": `{"id":"PYSEC-1"}`}))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		excludedRequested.Store(true)
+		http.Error(w, "should not be requested: "+r.URL.Path, http.StatusInternalServerError)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	t.Setenv("XDG_CACHE_HOME", tmp)
+
+	f := New(WithBaseURL(srv.URL), WithHTTPClient(srv.Client()))
+	dir, err := f.Fetch(context.Background())
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if excludedRequested.Load() {
+		t.Error("an excluded ecosystem was requested from upstream")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "PyPI", "PYSEC-1.json")); err != nil {
+		t.Errorf("included ecosystem missing: %v", err)
+	}
+	for _, eco := range []string{"GSD", "SUSE", "Generic"} {
+		if _, err := os.Stat(filepath.Join(dir, eco)); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("excluded ecosystem %s present on disk, stat err = %v", eco, err)
+		}
+	}
+}
+
+// TestFetcher_Fetch_WithExcludedEcosystemsOverridesDefault pins the
+// override contract: the caller-supplied list REPLACES the default
+// (an empty list fetches everything upstream offers).
+func TestFetcher_Fetch_WithExcludedEcosystemsOverridesDefault(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ecosystems.txt", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("PyPI\nSUSE\n"))
+	})
+	mux.HandleFunc("/PyPI/all.zip", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(zipBytes(t, map[string]string{"PYSEC-1.json": `{"id":"PYSEC-1"}`}))
+	})
+	mux.HandleFunc("/SUSE/all.zip", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(zipBytes(t, map[string]string{"SUSE-SU-1.json": `{"id":"SUSE-SU-1"}`}))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	t.Setenv("XDG_CACHE_HOME", tmp)
+
+	f := New(WithBaseURL(srv.URL), WithHTTPClient(srv.Client()),
+		WithExcludedEcosystems([]string{}))
+	dir, err := f.Fetch(context.Background())
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	// Default exclusion is replaced: SUSE (default-excluded) is fetched now.
+	if _, err := os.Stat(filepath.Join(dir, "SUSE", "SUSE-SU-1.json")); err != nil {
+		t.Errorf("override should fetch SUSE: %v", err)
+	}
+}
+
+func TestExcluded(t *testing.T) {
+	excl := map[string]struct{}{"SUSE": {}, "Wolfi": {}}
+	tests := []struct {
+		eco  string
+		want bool
+	}{
+		{eco: "SUSE", want: true},
+		{eco: "SUSE:15", want: true},   // release-qualified upstream form
+		{eco: "openSUSE", want: false}, // prefix must not leak across names
+		{eco: "Wolfi", want: true},
+		{eco: "PyPI", want: false},
+	}
+	for _, tc := range tests {
+		if got := excluded(excl, tc.eco); got != tc.want {
+			t.Errorf("excluded(%q) = %v, want %v", tc.eco, got, tc.want)
+		}
+	}
 }
