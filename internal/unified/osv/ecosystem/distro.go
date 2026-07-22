@@ -770,10 +770,13 @@ type TopOpam struct {
 func (t TopOpam) IsZero() bool { return t.CWE == nil && t.HumanLink == "" && t.OSV == "" }
 
 type AffectedEcoOpam struct {
-	OpamConstraint string `json:"opam_constraint,omitempty"`
+	AffectedBindings []string `json:"affected_bindings,omitempty"`
+	OpamConstraint   string   `json:"opam_constraint,omitempty"`
 }
 
-func (a AffectedEcoOpam) IsZero() bool { return a == AffectedEcoOpam{} }
+func (a AffectedEcoOpam) IsZero() bool {
+	return a.AffectedBindings == nil && a.OpamConstraint == ""
+}
 
 type AffectedDBOpam struct {
 	Source string `json:"source,omitempty"`
