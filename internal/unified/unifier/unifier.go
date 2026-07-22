@@ -77,15 +77,23 @@ func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []
 			}
 			base := rec.Base()
 			source := SourceTag(e.Kind, e.Source)
+			affs = append(affs, OSVAffectedRecords(rec, prov, source)...)
+			for _, a := range base.Aliases {
+				addSourceID(a)
+			}
+			// osv.dev's GIT bucket is a CVE→OSV conversion: its unique
+			// value is the structured git commit ranges collected above;
+			// its prose, severity, CWEs, and timestamps are transcribed
+			// from the CVE record ingested directly, so merging them
+			// would only duplicate CVE5 content (§8.9).
+			if e.Source == gitEcosystem {
+				continue
+			}
 			refs = append(refs, OSVReferences(base.References)...)
 			descs = append(descs, OSVDescriptions(*base, prov, source)...)
 			sevs = append(sevs, OSVSeverities(base.Severity, prov, source)...)
 			weaks = append(weaks, OSVWeaknesses(rec, prov, source)...)
-			affs = append(affs, OSVAffectedRecords(rec, prov, source)...)
 			dates.observe(base.Published, base.Modified)
-			for _, a := range base.Aliases {
-				addSourceID(a)
-			}
 		case advisory.SourceCVE:
 			rec, err := readCVE(path)
 			if err != nil {
@@ -124,6 +132,10 @@ func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []
 		Provenances:  provenances,
 	}, nil
 }
+
+// gitEcosystem is walker's IndexEntry.Source value for osv.dev's GIT
+// bucket, whose merge contribution is limited to affected[] (§8.9).
+const gitEcosystem = "GIT"
 
 // dateRange folds per-source timestamps into the §8.8 uniform pair:
 // earliest published, latest modified. Zero inputs are ignored so a
