@@ -142,3 +142,69 @@ func TestMergeSeverities(t *testing.T) {
 		})
 	}
 }
+
+// TestMergeSeverities_FillsScoreFromVector pins the uniformity rule:
+// every CVSS assessment carries a base score, whichever source asserted
+// it. OSV entries arrive with only the vector (OSV `score` is the
+// vector string); the merge computes the missing number. Non-CVSS
+// values (Ubuntu's rating words) and source-asserted scores are left
+// untouched.
+func TestMergeSeverities_FillsScoreFromVector(t *testing.T) {
+	prov := advisory.Provenance{Kind: advisory.SourceOSV, Path: "osv/PyPI/PYSEC-1.json", ID: "PYSEC-1"}
+
+	tests := []struct {
+		name string
+		in   advisory.Severity
+		want string // expected Score after merge
+	}{
+		{
+			name: "CVSS v3.1 vector",
+			in:   advisory.Severity{Type: "CVSS_V3", Vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H", From: prov},
+			want: "9.8",
+		},
+		{
+			name: "CVSS v3.0 vector",
+			in:   advisory.Severity{Type: "CVSS_V3", Vector: "CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H", From: prov},
+			want: "9.8",
+		},
+		{
+			name: "CVSS v4.0 vector",
+			in:   advisory.Severity{Type: "CVSS_V4", Vector: "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N", From: prov},
+			want: "9.3",
+		},
+		{
+			name: "CVSS v2 vector (no CVSS: prefix upstream)",
+			in:   advisory.Severity{Type: "CVSS_V2", Vector: "AV:N/AC:L/Au:N/C:P/I:P/A:P", From: prov},
+			want: "7.5",
+		},
+		{
+			name: "source-asserted score is preserved",
+			in:   advisory.Severity{Type: "CVSS_V3", Vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H", Score: "9.9", From: prov},
+			want: "9.9",
+		},
+		{
+			name: "non-CVSS rating word stays untouched",
+			in:   advisory.Severity{Type: "Ubuntu", Vector: "medium", From: prov},
+			want: "",
+		},
+		{
+			name: "malformed CVSS vector stays untouched",
+			in:   advisory.Severity{Type: "CVSS_V3", Vector: "CVSS:3.1/garbage", From: prov},
+			want: "",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := mergeSeverities([]severityItem{{Severity: tc.in, source: "osv.PyPI"}})
+			if len(got) != 1 {
+				t.Fatalf("merged to %d entries", len(got))
+			}
+			if got[0].Score != tc.want {
+				t.Errorf("Score = %q, want %q", got[0].Score, tc.want)
+			}
+			if got[0].Vector != tc.in.Vector {
+				t.Errorf("Vector changed: %q", got[0].Vector)
+			}
+		})
+	}
+}

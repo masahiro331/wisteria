@@ -6,6 +6,7 @@ import (
 	"github.com/masahiro331/wisteria/internal/unified/osv"
 	"github.com/masahiro331/wisteria/internal/unified/osv/ecosystem"
 	"github.com/masahiro331/wisteria/pkg/advisory"
+	"github.com/masahiro331/wisteria/pkg/advisory/cve"
 )
 
 // TestOSVAffectedRecords_PreservesConcreteType checks that the
@@ -67,5 +68,48 @@ func TestOSVAffectedRecords_NilRecord(t *testing.T) {
 	prov := advisory.Provenance{Kind: advisory.SourceOSV}
 	if got := OSVAffectedRecords(nil, prov, "osv.PyPI"); len(got) != 0 {
 		t.Errorf("OSVAffectedRecords(nil) = %#v, want empty", got)
+	}
+}
+
+// TestOSVDescriptions_RolesAndLang pins the role marker that makes OSV's
+// two unmarked entries distinguishable, and the BCP47 primary-subtag
+// lang normalization shared with CVEDescriptions.
+func TestOSVDescriptions_RolesAndLang(t *testing.T) {
+	prov := advisory.Provenance{Kind: advisory.SourceOSV, Path: "osv/PyPI/PYSEC-1.json", ID: "PYSEC-1"}
+	rec := osv.Record{Summary: "short", Details: "long text"}
+
+	got := OSVDescriptions(rec, prov, "osv.PyPI")
+
+	if len(got) != 2 {
+		t.Fatalf("got %d items, want 2", len(got))
+	}
+	if got[0].Role != advisory.DescriptionSummary || got[0].Text != "short" || got[0].Lang != "en" {
+		t.Errorf("summary item = %+v", got[0].Description)
+	}
+	if got[1].Role != advisory.DescriptionDetails || got[1].Text != "long text" {
+		t.Errorf("details item = %+v", got[1].Description)
+	}
+}
+
+func TestCVEDescriptions_RoleAndLangNormalization(t *testing.T) {
+	prov := advisory.Provenance{Kind: advisory.SourceCVE, Path: "cve/x.json", ID: "CVE-2024-0001"}
+	in := []cve.Description{
+		{Lang: "en-US", Value: "english text"},
+		{Lang: "de", Value: "deutscher Text"},
+	}
+
+	got := CVEDescriptions(in, prov)
+
+	if len(got) != 2 {
+		t.Fatalf("got %d items, want 2", len(got))
+	}
+	if got[0].Lang != "en" {
+		t.Errorf("lang en-US not normalized: %q", got[0].Lang)
+	}
+	if got[0].Role != advisory.DescriptionDetails || got[1].Role != advisory.DescriptionDetails {
+		t.Errorf("CVE roles = %q / %q, want details", got[0].Role, got[1].Role)
+	}
+	if got[1].Lang != "de" {
+		t.Errorf("lang de = %q", got[1].Lang)
 	}
 }

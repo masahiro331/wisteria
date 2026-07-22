@@ -3,6 +3,7 @@ module github.com/masahiro331/wisteria
 go 1.25.7
 
 require (
+	github.com/pandatix/go-cvss v0.6.2
 	github.com/spf13/cobra v1.10.2
 	github.com/vbauerster/mpb/v8 v8.13.0
 	golang.org/x/sync v0.22.0

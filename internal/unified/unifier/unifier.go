@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 
 	"github.com/masahiro331/wisteria/internal/unified"
 	"github.com/masahiro331/wisteria/internal/unified/osv"
@@ -51,6 +52,7 @@ func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []
 		weaks       []weaknessItem
 		affs        []affectedItem
 		provenances []advisory.Provenance
+		dates       dateRange
 	)
 	sourceIDs := make(map[string]struct{})
 	addSourceID := func(id string) {
@@ -80,6 +82,7 @@ func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []
 			sevs = append(sevs, OSVSeverities(base.Severity, prov, source)...)
 			weaks = append(weaks, OSVWeaknesses(rec, prov, source)...)
 			affs = append(affs, OSVAffectedRecords(rec, prov, source)...)
+			dates.observe(base.Published, base.Modified)
 			for _, a := range base.Aliases {
 				addSourceID(a)
 			}
@@ -94,6 +97,7 @@ func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []
 			sevs = append(sevs, CVEMetrics(cna.Metrics, prov)...)
 			weaks = append(weaks, CVEWeaknesses(cna.ProblemTypes, prov)...)
 			affs = append(affs, CVEAffectedRecords(cna.Affected, prov)...)
+			dates.observe(rec.CVEMetadata.DatePublished.Time, rec.CVEMetadata.DateUpdated.Time)
 			for i, adp := range rec.Containers.ADP {
 				adpProv := ADPProvenance(prov, adp, i)
 				provenances = append(provenances, adpProv)
@@ -110,6 +114,8 @@ func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []
 	return advisory.UnifiedAdvisory{
 		PrimaryID:    primaryID,
 		SourceIDs:    sortedSet(sourceIDs),
+		Published:    dates.published,
+		Modified:     dates.modified,
 		Descriptions: mergeDescriptions(descs),
 		References:   mergeReferences(refs),
 		Severities:   mergeSeverities(sevs),
@@ -117,6 +123,23 @@ func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []
 		Affected:     mergeAffected(affs),
 		Provenances:  provenances,
 	}, nil
+}
+
+// dateRange folds per-source timestamps into the §8.8 uniform pair:
+// earliest published, latest modified. Zero inputs are ignored so a
+// source without dates cannot fabricate one.
+type dateRange struct {
+	published time.Time
+	modified  time.Time
+}
+
+func (d *dateRange) observe(published, modified time.Time) {
+	if !published.IsZero() && (d.published.IsZero() || published.Before(d.published)) {
+		d.published = published
+	}
+	if !modified.IsZero() && modified.After(d.modified) {
+		d.modified = modified
+	}
 }
 
 // sortedSet returns the keys of a string set as a lex-sorted slice, or
