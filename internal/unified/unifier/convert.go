@@ -2,6 +2,7 @@ package unifier
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/masahiro331/wisteria/internal/unified/osv"
 	"github.com/masahiro331/wisteria/pkg/advisory"
@@ -99,22 +100,33 @@ func formatScore(p *float64) string {
 // OSVDescriptions emits up to two parallel descriptions per record:
 // Summary then Details, both as English text. Lang is fixed to "en"
 // because OSV schema does not carry a per-text lang field. Empty
-// strings are skipped so we don't emit blank entries.
+// strings are skipped so we don't emit blank entries. The Role marker
+// is what keeps the two entries distinguishable after the merge.
 func OSVDescriptions(rec osv.Record, from advisory.Provenance, source string) []descriptionItem {
 	var out []descriptionItem
 	if rec.Summary != "" {
 		out = append(out, descriptionItem{
-			Description: advisory.Description{Lang: "en", Text: rec.Summary, From: from},
+			Description: advisory.Description{Role: advisory.DescriptionSummary, Lang: "en", Text: rec.Summary, From: from},
 			source:      source,
 		})
 	}
 	if rec.Details != "" {
 		out = append(out, descriptionItem{
-			Description: advisory.Description{Lang: "en", Text: rec.Details, From: from},
+			Description: advisory.Description{Role: advisory.DescriptionDetails, Lang: "en", Text: rec.Details, From: from},
 			source:      source,
 		})
 	}
 	return out
+}
+
+// normalizeLang reduces a BCP47 tag to its lowercase primary subtag
+// ("en-US" → "en") so the same language never appears under two
+// spellings in one merged record.
+func normalizeLang(lang string) string {
+	if i := strings.IndexByte(lang, '-'); i >= 0 {
+		lang = lang[:i]
+	}
+	return strings.ToLower(lang)
 }
 
 // CVEDescriptions converts a single Container's descriptions[]. The
@@ -125,7 +137,9 @@ func CVEDescriptions(in []cve.Description, from advisory.Provenance) []descripti
 	out := make([]descriptionItem, 0, len(in))
 	for _, d := range in {
 		out = append(out, descriptionItem{
-			Description: advisory.Description{Lang: d.Lang, Text: d.Value, From: from},
+			// CVE5 texts are full descriptions, not one-line headlines,
+			// so they carry the same "details" role as OSV details.
+			Description: advisory.Description{Role: advisory.DescriptionDetails, Lang: normalizeLang(d.Lang), Text: d.Value, From: from},
 			source:      SourceCVEMitre,
 		})
 	}

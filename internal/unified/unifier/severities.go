@@ -73,6 +73,13 @@ func mergeSeverities(in []severityItem) []advisory.Severity {
 	out := make([]advisory.Severity, len(sorted))
 	for i, it := range sorted {
 		out[i] = it.Severity
+		// Uniformity rule: every CVSS assessment carries a base score,
+		// whichever source asserted it. OSV entries arrive vector-only,
+		// so compute the missing number; a source-asserted score is
+		// never overridden, and non-CVSS values stay verbatim.
+		if out[i].Score == "" {
+			out[i].Score = baseScoreFromVector(out[i].Vector)
+		}
 	}
 	return out
 }

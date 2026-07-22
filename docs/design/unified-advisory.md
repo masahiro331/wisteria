@@ -176,13 +176,22 @@ type Reference struct {
 }
 
 // Description は 1 source 由来の説明文。並列保持する (merge しない)。
+// Role はテキストの機能: "summary" (OSV summary) | "details" (OSV details /
+// CVE5 descriptions)。source ではなく機能を表すので、消費者はどのカタログ
+// 由来かを知らずに用途で選べる。Lang は BCP47 primary subtag に正規化
+// ("en-US" → "en")。
 type Description struct {
+    Role string     `json:"role"`   // "summary" | "details"
     Lang string     `json:"lang"`
     Text string     `json:"text"`
     From Provenance `json:"from"`
 }
 
 // Severity は CVSS など重大度評価 1 件。並列保持し、自明な重複だけ dedup する。
+// Score は CVSS の場合必ず入る: source が数値を持たない場合 (OSV は vector
+// のみ) は merge 時に Vector から base score を計算して埋める (§8.4)。
+// 非 CVSS のレーティング語 (Ubuntu "medium" 等) は verbatim のまま (§ open
+// question #119)。
 type Severity struct {
     Type   string     `json:"type"`             // 例: "CVSS_V3", "CVSS_V4"
     Score  string     `json:"score,omitempty"`  // base score (例: "9.8")
@@ -253,6 +262,8 @@ type ExploitDBRecord struct {
 type UnifiedAdvisory struct {
     PrimaryID    string            `json:"primary_id"`
     SourceIDs    []string          `json:"source_ids,omitempty"`  // PrimaryID 以外の ID (dedup + 辞書順)
+    Published    time.Time         `json:"published,omitzero"`    // 全 source 中の最古 (§8.8)
+    Modified     time.Time         `json:"modified,omitzero"`     // 全 source 中の最新 (§8.8)
     Descriptions []Description     `json:"descriptions"`          // 並列保持 (lang × source)
     References   []Reference       `json:"references"`            // dedup + 辞書順
     Severities   []Severity        `json:"severities"`            // dedup
@@ -332,12 +343,18 @@ KEV / EPSS はベンダー / advisory ではなく exploit シグナルなので
 - OSV 由来は `Summary` と `Details` を別エントリとして両方保持する (どちらも空でなければ)。要約 / 本文は意味が違うため後段の AI 要約に両方渡す
 - CVE5 は CNA の `containers.cna.descriptions[]` に加え、各 ADP (`containers.adp[].descriptions[]`、CISA Vulnrichment 等) も収集する。ADP 由来は Provenance.ID に `#adp:<providerShortName>` を付けて CNA と区別 (情報量を最大化する方針: 後段 AI で取捨選択する)
 
+#### 8.3 補足: Role と Lang
+
+- 各エントリに Role を付与する: OSV summary → `summary`、OSV details と CVE5 descriptions → `details`。OSV の 2 エントリが区別不能になる leak を塞ぐ
+- Lang は BCP47 primary subtag へ正規化 ("en-US" → "en")。CVE5 実データに `en` / `en-US` の表記ゆれがある
+
 ### 8.4 Severities
 
 - 自明な重複だけ dedup する。評価が違うものは別エントリとして残す。
   - 第一 key: `(Type, Vector)` (Vector が空でないとき)
   - フォールバック key: `(Type, Score)` (Vector が無い古い CVSS など)
 - 同じ key で複数 source 由来のものを 1 件に寄せる場合、最優先 source の Provenance を残す
+- **Score の常時付与**: dedup 後、Score が空で Vector が CVSS ベクターのエントリは base score を計算して埋める (go-cvss、v2/v3.0/v3.1/v4.0 対応)。source が主張した Score は上書きしない。非 CVSS 値・不正ベクターは verbatim のまま
 - 並び順: 優先度配列順 → Type → Vector → Score。末尾 2 項は決定的な tie-breaker (1 つの CVE5 ファイルが `cvssV3_0` と `cvssV3_1` を両方持つケースなど、source rank と Type が一致する複数残存エントリがあっても出力順が再現可能になるように)
 
 ### 8.4b Weaknesses (CWE)
@@ -367,6 +384,12 @@ KEV / EPSS / Exploit-DB は merge ではなく Stage 4 (Annotate, §5.2) で個�
 
 - フィールドごとに pure function で書く (`mergeReferences(...) []Reference` 等)
 - 各 pure function に table-driven test を書く
+
+### 8.8 日付 (Published / Modified)
+
+- `Published` = 全 source の公開日時の最古、`Modified` = 更新日時の最新。source を問わない一様なペアにする
+- 収集元: OSV `published` / `modified`、CVE5 `cveMetadata.datePublished` / `dateUpdated`
+- どの source も日時を持たない場合は zero 値のまま (JSON では省略)
 
 ## 9. 各 stage の I/F
 

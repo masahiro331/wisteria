@@ -11,6 +11,8 @@
 package advisory
 
 import (
+	"time"
+
 	"github.com/masahiro331/wisteria/pkg/advisory/cve"
 )
 
@@ -41,10 +43,21 @@ type Reference struct {
 	Tags []string `json:"tags,omitempty"`
 }
 
+// Description role values. The role describes the text's function, not
+// its source: OSV's one-line summary is a "summary"; OSV details and
+// CVE5 description texts are both "details", so consumers pick by
+// function without knowing which catalog contributed the entry.
+const (
+	DescriptionSummary = "summary"
+	DescriptionDetails = "details"
+)
+
 // Description is one description text from one source. We do not merge
 // descriptions across sources — each is kept as-is with its provenance,
 // because phrasing matters and Phase 2 (AI) decides which to surface.
+// Lang is normalized to the BCP47 primary subtag ("en-US" → "en").
 type Description struct {
+	Role string     `json:"role"`
 	Lang string     `json:"lang"`
 	Text string     `json:"text"`
 	From Provenance `json:"from"`
@@ -131,9 +144,15 @@ type ExploitDBRecord struct {
 // UnifiedAdvisory is the merged record keyed by PrimaryID. SourceIDs holds
 // every other identifier the same vuln is known by (dedup + sorted), so a
 // caller searching by GHSA / PYSEC / ALBA still finds the CVE-keyed file.
+//
+// Published is the earliest time any source published the advisory;
+// Modified is the latest time any source touched it. Zero (absent in
+// JSON) when no source carried the respective date.
 type UnifiedAdvisory struct {
 	PrimaryID    string            `json:"primary_id"`
 	SourceIDs    []string          `json:"source_ids,omitempty"`
+	Published    time.Time         `json:"published,omitzero"`
+	Modified     time.Time         `json:"modified,omitzero"`
 	Descriptions []Description     `json:"descriptions"`
 	References   []Reference       `json:"references"`
 	Severities   []Severity        `json:"severities"`
