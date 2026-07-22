@@ -18,7 +18,7 @@ func (d *fakeDriver) Find(_ context.Context, _ string) ([]advisory.UnifiedAdviso
 	return nil, db.ErrNotFound
 }
 
-func (d *fakeDriver) FindByPackage(_ context.Context, _, _ string) ([]advisory.UnifiedAdvisory, error) {
+func (d *fakeDriver) FindByPackage(_ context.Context, _ advisory.Ecosystem, _ string) ([]advisory.UnifiedAdvisory, error) {
 	return nil, nil
 }
 

@@ -61,8 +61,10 @@ type Driver interface {
 
 	// FindByPackage returns every UnifiedAdvisory whose OSV affected
 	// block matches (ecosystem, name) exactly. No version evaluation.
-	// No match returns an empty slice and a nil error.
-	FindByPackage(ctx context.Context, ecosystem, name string) ([]advisory.UnifiedAdvisory, error)
+	// No match returns an empty slice and a nil error. ecosystem is the
+	// typed advisory.Ecosystem (constants per known OSV ecosystem;
+	// release-qualified keys like "Alpine:v3.17" via WithSuffix).
+	FindByPackage(ctx context.Context, ecosystem advisory.Ecosystem, name string) ([]advisory.UnifiedAdvisory, error)
 
 	Close() error
 }
@@ -88,7 +90,7 @@ defer d.Close()
 
 advs, err := d.Find(ctx, "GHSA-hwqr-...")           // alias 引き
 advs, err = d.Find(ctx, "CVE-2024-1234")             // PrimaryID 直引き
-advs, err = d.FindByPackage(ctx, "PyPI", "django")   // パッケージ検索
+advs, err = d.FindByPackage(ctx, advisory.EcosystemPyPI, "django") // パッケージ検索
 ```
 
 ### 4.1 Find の解決規則

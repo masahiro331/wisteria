@@ -48,9 +48,11 @@ type Driver interface {
 
 	// FindByPackage returns every UnifiedAdvisory whose OSV affected
 	// block matches (ecosystem, name) exactly, ordered by PrimaryID.
-	// It does not evaluate version ranges — callers check Affected
-	// themselves. No match returns an empty slice and a nil error.
-	FindByPackage(ctx context.Context, ecosystem, name string) ([]advisory.UnifiedAdvisory, error)
+	// Use the advisory.Ecosystem* constants (plus WithSuffix for
+	// release-qualified keys like Alpine:v3.17). It does not evaluate
+	// version ranges — callers check Affected themselves. No match
+	// returns an empty slice and a nil error.
+	FindByPackage(ctx context.Context, ecosystem advisory.Ecosystem, name string) ([]advisory.UnifiedAdvisory, error)
 
 	// Close releases backend resources. Safe to call once.
 	Close() error
