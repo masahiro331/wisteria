@@ -24,6 +24,7 @@ type RecordAndroid struct {
 
 func (r *RecordAndroid) Base() *osv.Record  { return &r.Record }
 func (r *RecordAndroid) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordAndroid) CWEIDs() []string   { return nil }
 
 type AffectedAndroid struct {
 	osv.AffectedBase
@@ -107,6 +108,7 @@ type RecordBitnami struct {
 
 func (r *RecordBitnami) Base() *osv.Record  { return &r.Record }
 func (r *RecordBitnami) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordBitnami) CWEIDs() []string   { return nil }
 
 type AffectedBitnami struct {
 	osv.AffectedBase
@@ -155,6 +157,7 @@ type RecordDebian struct {
 
 func (r *RecordDebian) Base() *osv.Record  { return &r.Record }
 func (r *RecordDebian) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordDebian) CWEIDs() []string   { return nil }
 
 type AffectedDebian struct {
 	osv.AffectedBase
@@ -202,6 +205,7 @@ type RecordGHC struct {
 
 func (r *RecordGHC) Base() *osv.Record  { return &r.Record }
 func (r *RecordGHC) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordGHC) CWEIDs() []string   { return nil }
 
 type AffectedGHC struct {
 	osv.AffectedBase
@@ -253,6 +257,7 @@ type RecordHackage struct {
 
 func (r *RecordHackage) Base() *osv.Record  { return &r.Record }
 func (r *RecordHackage) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordHackage) CWEIDs() []string   { return nil }
 
 type AffectedHackage struct {
 	osv.AffectedBase
@@ -304,6 +309,7 @@ type RecordJulia struct {
 
 func (r *RecordJulia) Base() *osv.Record  { return &r.Record }
 func (r *RecordJulia) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordJulia) CWEIDs() []string   { return nil }
 
 type AffectedJulia struct {
 	osv.AffectedBase
@@ -372,6 +378,7 @@ type RecordLinux struct {
 
 func (r *RecordLinux) Base() *osv.Record  { return &r.Record }
 func (r *RecordLinux) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordLinux) CWEIDs() []string   { return nil }
 
 type AffectedLinux struct {
 	osv.AffectedBase
@@ -426,6 +433,7 @@ type RecordMageia struct {
 
 func (r *RecordMageia) Base() *osv.Record  { return &r.Record }
 func (r *RecordMageia) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordMageia) CWEIDs() []string   { return nil }
 
 type AffectedMageia struct {
 	osv.AffectedBase
@@ -473,6 +481,7 @@ type RecordSUSE struct {
 
 func (r *RecordSUSE) Base() *osv.Record  { return &r.Record }
 func (r *RecordSUSE) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordSUSE) CWEIDs() []string   { return nil }
 
 type AffectedSUSE struct {
 	osv.AffectedBase
@@ -524,6 +533,7 @@ type RecordOpenSUSE struct {
 
 func (r *RecordOpenSUSE) Base() *osv.Record  { return &r.Record }
 func (r *RecordOpenSUSE) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordOpenSUSE) CWEIDs() []string   { return nil }
 
 type AffectedOpenSUSE struct {
 	osv.AffectedBase
@@ -571,6 +581,7 @@ type RecordUbuntu struct {
 
 func (r *RecordUbuntu) Base() *osv.Record  { return &r.Record }
 func (r *RecordUbuntu) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordUbuntu) CWEIDs() []string   { return nil }
 
 type AffectedUbuntu struct {
 	osv.AffectedBase
@@ -680,6 +691,7 @@ type RecordVSCode struct {
 
 func (r *RecordVSCode) Base() *osv.Record  { return &r.Record }
 func (r *RecordVSCode) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordVSCode) CWEIDs() []string   { return nil }
 
 type AffectedVSCode struct {
 	osv.AffectedBase
@@ -751,6 +763,7 @@ type RecordOpam struct {
 
 func (r *RecordOpam) Base() *osv.Record  { return &r.Record }
 func (r *RecordOpam) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordOpam) CWEIDs() []string   { return r.DatabaseSpecific.CWE }
 
 type AffectedOpam struct {
 	osv.AffectedBase
@@ -805,6 +818,7 @@ type RecordOpenEuler struct {
 
 func (r *RecordOpenEuler) Base() *osv.Record  { return &r.Record }
 func (r *RecordOpenEuler) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordOpenEuler) CWEIDs() []string   { return nil }
 
 type AffectedOpenEuler struct {
 	osv.AffectedBase

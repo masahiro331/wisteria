@@ -48,6 +48,7 @@ func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []
 		refs        []advisory.Reference
 		descs       []descriptionItem
 		sevs        []severityItem
+		weaks       []weaknessItem
 		affs        []affectedItem
 		provenances []advisory.Provenance
 	)
@@ -77,6 +78,7 @@ func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []
 			refs = append(refs, OSVReferences(base.References)...)
 			descs = append(descs, OSVDescriptions(*base, prov, source)...)
 			sevs = append(sevs, OSVSeverities(base.Severity, prov, source)...)
+			weaks = append(weaks, OSVWeaknesses(rec, prov, source)...)
 			affs = append(affs, OSVAffectedRecords(rec, prov, source)...)
 			for _, a := range base.Aliases {
 				addSourceID(a)
@@ -90,6 +92,7 @@ func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []
 			refs = append(refs, CVEReferences(cna.References)...)
 			descs = append(descs, CVEDescriptions(cna.Descriptions, prov)...)
 			sevs = append(sevs, CVEMetrics(cna.Metrics, prov)...)
+			weaks = append(weaks, CVEWeaknesses(cna.ProblemTypes, prov)...)
 			affs = append(affs, CVEAffectedRecords(cna.Affected, prov)...)
 			for i, adp := range rec.Containers.ADP {
 				adpProv := ADPProvenance(prov, adp, i)
@@ -97,6 +100,7 @@ func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []
 				refs = append(refs, CVEReferences(adp.References)...)
 				descs = append(descs, CVEDescriptions(adp.Descriptions, adpProv)...)
 				sevs = append(sevs, CVEMetrics(adp.Metrics, adpProv)...)
+				weaks = append(weaks, CVEWeaknesses(adp.ProblemTypes, adpProv)...)
 				affs = append(affs, CVEAffectedRecords(adp.Affected, adpProv)...)
 			}
 		default:
@@ -109,6 +113,7 @@ func MergePrimary(ctx context.Context, sourcesRoot, primaryID string, entries []
 		Descriptions: mergeDescriptions(descs),
 		References:   mergeReferences(refs),
 		Severities:   mergeSeverities(sevs),
+		Weaknesses:   mergeWeaknesses(weaks),
 		Affected:     mergeAffected(affs),
 		Provenances:  provenances,
 	}, nil

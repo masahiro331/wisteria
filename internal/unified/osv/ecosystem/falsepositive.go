@@ -24,6 +24,7 @@ type RecordChainguard struct {
 
 func (r *RecordChainguard) Base() *osv.Record  { return &r.Record }
 func (r *RecordChainguard) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordChainguard) CWEIDs() []string   { return nil }
 
 type AffectedChainguard struct {
 	osv.AffectedBase
@@ -78,6 +79,7 @@ type RecordWolfi struct {
 
 func (r *RecordWolfi) Base() *osv.Record  { return &r.Record }
 func (r *RecordWolfi) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordWolfi) CWEIDs() []string   { return nil }
 
 type AffectedWolfi struct {
 	osv.AffectedBase
@@ -132,6 +134,7 @@ type RecordMinimOS struct {
 
 func (r *RecordMinimOS) Base() *osv.Record  { return &r.Record }
 func (r *RecordMinimOS) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordMinimOS) CWEIDs() []string   { return nil }
 
 type AffectedMinimOS struct {
 	osv.AffectedBase
@@ -186,6 +189,7 @@ type RecordRockyLinux struct {
 
 func (r *RecordRockyLinux) Base() *osv.Record  { return &r.Record }
 func (r *RecordRockyLinux) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordRockyLinux) CWEIDs() []string   { return nil }
 
 type AffectedRockyLinux struct {
 	osv.AffectedBase

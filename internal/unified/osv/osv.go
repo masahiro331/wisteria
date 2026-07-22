@@ -283,7 +283,13 @@ type RangeBase struct {
 // ecosystems pull the affected entries without a per-type switch or
 // reflection — every `RecordX` implements it, so the compiler
 // guarantees full coverage as new ecosystems are added.
+//
+// `CWEIDs` returns the record's CWE identifiers when its typed
+// `database_specific` carries them (GHSA-family `cwe_ids`, opam
+// `cwe`), nil otherwise. Mandatory for the same reason as
+// AffectedAny: a new ecosystem cannot silently drop its CWE data.
 type OSVRecord interface {
 	Base() *Record
 	AffectedAny() []any
+	CWEIDs() []string
 }
