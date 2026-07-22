@@ -21,18 +21,25 @@ type fetchOptions struct {
 	concurrency int
 	retries     int
 	tracker     *progress.Tracker
+	// osvExclude overrides the OSV fetcher's default ecosystem
+	// exclusion list; nil means "flag not set, keep the default".
+	osvExclude []string
 }
 
 // fetcherFactory builds a Fetcher with the resolved options applied.
 type fetcherFactory func(opts fetchOptions) fetcher.Fetcher
 
 func osvFactory(opts fetchOptions) fetcher.Fetcher {
-	return osv.New(
+	osvOpts := []osv.Option{
 		osv.WithCacheDir(opts.cacheDir),
 		osv.WithProgress(opts.tracker),
 		osv.WithConcurrency(opts.concurrency),
 		osv.WithRetries(opts.retries),
-	)
+	}
+	if opts.osvExclude != nil {
+		osvOpts = append(osvOpts, osv.WithExcludedEcosystems(opts.osvExclude))
+	}
+	return osv.New(osvOpts...)
 }
 
 func cveFactory(opts fetchOptions) fetcher.Fetcher {
@@ -71,12 +78,30 @@ func optionsFromCmd(cmd *cobra.Command) fetchOptions {
 	cacheDir, _ := cmd.Flags().GetString(cacheDirFlag)
 	concurrency, _ := cmd.Flags().GetInt(concurrencyFlag)
 	retries, _ := cmd.Flags().GetInt(retriesFlag)
-	return fetchOptions{
+	opts := fetchOptions{
 		cacheDir:    cacheDir,
 		concurrency: concurrency,
 		retries:     retries,
 		tracker:     newTracker(cmd.ErrOrStderr()),
 	}
+	if cmd.Flags().Changed(osvExcludeFlag) {
+		vals, _ := cmd.Flags().GetStringSlice(osvExcludeFlag)
+		opts.osvExclude = normalizeExcludes(vals)
+	}
+	return opts
+}
+
+// normalizeExcludes drops empty entries so `--osv-exclude=""` cleanly
+// means "exclude nothing" (pflag parses the empty value as [""]).
+// A non-nil (possibly empty) slice signals "flag was set".
+func normalizeExcludes(vals []string) []string {
+	out := make([]string, 0, len(vals))
+	for _, v := range vals {
+		if v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 func newFetchCmd() *cobra.Command {
@@ -94,6 +119,10 @@ func newFetchCmd() *cobra.Command {
 	c.PersistentFlags().Int(
 		retriesFlag, 3,
 		"max attempts per HTTP request before giving up (retries on 5xx and transport errors)",
+	)
+	c.PersistentFlags().StringSlice(
+		osvExcludeFlag, nil,
+		"override the default OSV ecosystem exclusion list (comma-separated upstream names; pass \"\" to fetch everything)",
 	)
 	c.AddCommand(
 		newFetchSourceCmd("osv", "Fetch OSV vulnerability data", osvFactory),

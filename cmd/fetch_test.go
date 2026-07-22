@@ -102,3 +102,28 @@ func TestRoot_CacheDirFlagParses(t *testing.T) {
 		t.Errorf("cache-dir = %q, want %q", got, "/tmp/example")
 	}
 }
+
+// TestFetch_OSVExcludeFlagInherited ensures --osv-exclude reaches the
+// osv and all subcommands (it lives on the fetch subtree like the other
+// HTTP knobs).
+func TestFetch_OSVExcludeFlagInherited(t *testing.T) {
+	for _, path := range [][]string{{"fetch", "osv"}, {"fetch", "all"}} {
+		root := NewRootCmd()
+		cmd, _, err := root.Find(path)
+		if err != nil {
+			t.Fatalf("Find(%v): %v", path, err)
+		}
+		if cmd.Flag(osvExcludeFlag) == nil {
+			t.Fatalf("--%s not inherited by %v", osvExcludeFlag, path)
+		}
+	}
+}
+
+func TestNormalizeExcludes(t *testing.T) {
+	if got := normalizeExcludes([]string{""}); len(got) != 0 || got == nil {
+		t.Errorf(`normalizeExcludes([""]) = %#v, want non-nil empty slice`, got)
+	}
+	if got := normalizeExcludes([]string{"GIT", "", "SUSE"}); len(got) != 2 {
+		t.Errorf("normalizeExcludes dropped wrong entries: %v", got)
+	}
+}
