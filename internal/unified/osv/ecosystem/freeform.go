@@ -247,60 +247,14 @@ func (a AffectedDBGIT) IsZero() bool {
 }
 
 type RangeDBGIT struct {
-	CPE             GITRangeCPE `json:"cpe,omitzero"`
-	ExtractedEvents []osv.Event `json:"extracted_events,omitempty"`
-	Source          string      `json:"source,omitempty"`
-	Versions        []osv.Event `json:"versions,omitempty"`
+	CPE             osv.StringOrList `json:"cpe,omitzero"`
+	ExtractedEvents []osv.Event      `json:"extracted_events,omitempty"`
+	Source          osv.StringOrList `json:"source,omitzero"`
+	Versions        []osv.Event      `json:"versions,omitempty"`
 }
 
 func (r RangeDBGIT) IsZero() bool {
-	return r.CPE.IsZero() && r.ExtractedEvents == nil && r.Source == "" && r.Versions == nil
-}
-
-// GITRangeCPE round-trips both string and []string variants found
-// upstream — most records emit a bare string, but advisories that
-// match multiple CPEs ship an array.
-type GITRangeCPE struct {
-	Set    bool
-	Single string
-	Multi  []string
-}
-
-func (c GITRangeCPE) IsZero() bool { return !c.Set }
-
-func (c GITRangeCPE) MarshalJSON() ([]byte, error) {
-	if !c.Set {
-		return []byte("null"), nil
-	}
-	if c.Multi != nil {
-		return json.Marshal(c.Multi)
-	}
-	return json.Marshal(c.Single)
-}
-
-func (c *GITRangeCPE) UnmarshalJSON(b []byte) error {
-	if len(b) == 0 || string(b) == "null" {
-		*c = GITRangeCPE{}
-		return nil
-	}
-	switch b[0] {
-	case '"':
-		var v string
-		if err := json.Unmarshal(b, &v); err != nil {
-			return err
-		}
-		*c = GITRangeCPE{Set: true, Single: v}
-		return nil
-	case '[':
-		var v []string
-		if err := json.Unmarshal(b, &v); err != nil {
-			return err
-		}
-		*c = GITRangeCPE{Set: true, Multi: v}
-		return nil
-	default:
-		return fmt.Errorf("GITRangeCPE: unexpected JSON %q", b)
-	}
+	return r.CPE.IsZero() && r.ExtractedEvents == nil && r.Source.IsZero() && r.Versions == nil
 }
 
 func NewRecordGIT(r io.Reader) (*RecordGIT, error) {
@@ -490,6 +444,7 @@ type TopRoot struct {
 	// none of them get omitempty.
 	Distro        string `json:"distro"`
 	DistroVersion string `json:"distro_version"`
+	Severity      string `json:"severity,omitempty"`
 	Source        string `json:"source"`
 }
 
@@ -547,6 +502,8 @@ type AffectedNpm struct {
 type RangeNpm struct{ osv.RangeBase }
 
 type TopNpm struct {
+	CAPECIDs                 []string               `json:"capec_ids,omitempty"`
+	CPEIDs                   []string               `json:"cpe_ids,omitempty"`
 	CWEIDs                   []string               `json:"cwe_ids"`
 	GitHubReviewed           bool                   `json:"github_reviewed,omitempty"`
 	GitHubReviewedAt         time.Time              `json:"github_reviewed_at,omitzero"`
@@ -557,7 +514,8 @@ type TopNpm struct {
 }
 
 func (t TopNpm) IsZero() bool {
-	return t.CWEIDs == nil && !t.GitHubReviewed && t.GitHubReviewedAt.IsZero() &&
+	return t.CAPECIDs == nil && t.CPEIDs == nil &&
+		t.CWEIDs == nil && !t.GitHubReviewed && t.GitHubReviewedAt.IsZero() &&
 		t.IOCs == nil && t.MaliciousPackagesOrigins == nil &&
 		t.NVDPublishedAt.IsZero() && t.Severity == ""
 }

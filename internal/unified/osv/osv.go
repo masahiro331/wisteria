@@ -83,6 +83,7 @@ const (
 	EcosystemOpam
 	EcosystemOpenEuler
 	EcosystemOpenSUSE
+	EcosystemTuxCare
 )
 
 // ecosystemName maps each Ecosystem value to its on-disk directory
@@ -135,6 +136,7 @@ var ecosystemName = [...]string{
 	EcosystemOpam:                       "opam",
 	EcosystemOpenEuler:                  "openEuler",
 	EcosystemOpenSUSE:                   "openSUSE",
+	EcosystemTuxCare:                    "TuxCare",
 }
 
 // String returns the on-disk directory name for this ecosystem

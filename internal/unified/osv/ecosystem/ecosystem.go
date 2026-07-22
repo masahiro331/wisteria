@@ -100,4 +100,5 @@ var parseDispatch = [...]func(io.Reader) (osv.OSVRecord, error){
 	osv.EcosystemOpam:                       func(r io.Reader) (osv.OSVRecord, error) { return NewRecordOpam(r) },
 	osv.EcosystemOpenEuler:                  func(r io.Reader) (osv.OSVRecord, error) { return NewRecordOpenEuler(r) },
 	osv.EcosystemOpenSUSE:                   func(r io.Reader) (osv.OSVRecord, error) { return NewRecordOpenSUSE(r) },
+	osv.EcosystemTuxCare:                    func(r io.Reader) (osv.OSVRecord, error) { return NewRecordTuxCare(r) },
 }

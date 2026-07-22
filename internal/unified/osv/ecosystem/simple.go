@@ -515,3 +515,52 @@ func NewRecordUVI(r io.Reader) (*RecordUVI, error) {
 	rec.Ecosystem = osv.EcosystemUVI
 	return &rec, nil
 }
+
+// ============================================================
+// TuxCare
+// ============================================================
+
+type RecordTuxCare struct {
+	osv.Record
+	Affected         []AffectedTuxCare `json:"affected,omitempty"`
+	DatabaseSpecific TopTuxCare        `json:"database_specific,omitzero"`
+}
+
+func (r *RecordTuxCare) Base() *osv.Record  { return &r.Record }
+func (r *RecordTuxCare) AffectedAny() []any { return affectedAny(r.Affected) }
+
+type AffectedTuxCare struct {
+	osv.AffectedBase
+	Ranges            []RangeTuxCare     `json:"ranges,omitempty"`
+	EcosystemSpecific AffectedEcoTuxCare `json:"ecosystem_specific,omitzero"`
+	DatabaseSpecific  AffectedDBTuxCare  `json:"database_specific,omitzero"`
+}
+
+type RangeTuxCare struct {
+	osv.RangeBase
+}
+
+type TopTuxCare struct{}
+
+func (TopTuxCare) IsZero() bool { return true }
+
+type AffectedEcoTuxCare struct{}
+
+func (AffectedEcoTuxCare) IsZero() bool { return true }
+
+// AffectedDBTuxCare carries the per-package pointer back to the
+// cloudlinux/tuxcare-osv source file.
+type AffectedDBTuxCare struct {
+	Source string `json:"source,omitempty"`
+}
+
+func (a AffectedDBTuxCare) IsZero() bool { return a == AffectedDBTuxCare{} }
+
+func NewRecordTuxCare(r io.Reader) (*RecordTuxCare, error) {
+	var rec RecordTuxCare
+	if err := json.NewDecoder(r).Decode(&rec); err != nil {
+		return nil, fmt.Errorf("osv: parse TuxCare: %w", err)
+	}
+	rec.Ecosystem = osv.EcosystemTuxCare
+	return &rec, nil
+}

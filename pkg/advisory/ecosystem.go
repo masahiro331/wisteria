@@ -57,6 +57,7 @@ const (
 	EcosystemOpam                       Ecosystem = "opam"
 	EcosystemOpenEuler                  Ecosystem = "openEuler"
 	EcosystemOpenSUSE                   Ecosystem = "openSUSE"
+	EcosystemTuxCare                    Ecosystem = "TuxCare"
 )
 
 // ecosystems is the canonical list backing Ecosystems(). Keep it in
@@ -108,6 +109,7 @@ var ecosystems = []Ecosystem{
 	EcosystemOpam,
 	EcosystemOpenEuler,
 	EcosystemOpenSUSE,
+	EcosystemTuxCare,
 }
 
 // Ecosystems returns every known base ecosystem (no release suffixes),
