@@ -30,6 +30,7 @@ func NewRootCmd() *cobra.Command {
 	)
 	root.AddCommand(newFetchCmd())
 	root.AddCommand(newUnifyCmd())
+	root.AddCommand(newDBCmd())
 	root.AddCommand(debug.NewCmd())
 	return root
 }
