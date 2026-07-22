@@ -283,16 +283,16 @@ func zipBytes(t *testing.T, entries map[string]string) []byte {
 // default: noise buckets (GIT / [EMPTY] / GSD / ...) are never
 // requested, so neither bandwidth nor disk is spent on them.
 func TestFetcher_Fetch_SkipsDefaultExcludedEcosystems(t *testing.T) {
-	var gitRequested atomic.Bool
+	var excludedRequested atomic.Bool
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ecosystems.txt", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("PyPI\nGIT\nGSD\nSUSE\n[EMPTY]\n"))
+		_, _ = w.Write([]byte("PyPI\nGSD\nSUSE\n[EMPTY]\n"))
 	})
 	mux.HandleFunc("/PyPI/all.zip", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write(zipBytes(t, map[string]string{"PYSEC-1.json": `{"id":"PYSEC-1"}`}))
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		gitRequested.Store(true)
+		excludedRequested.Store(true)
 		http.Error(w, "should not be requested: "+r.URL.Path, http.StatusInternalServerError)
 	})
 	srv := httptest.NewServer(mux)
@@ -307,13 +307,13 @@ func TestFetcher_Fetch_SkipsDefaultExcludedEcosystems(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	if gitRequested.Load() {
+	if excludedRequested.Load() {
 		t.Error("an excluded ecosystem was requested from upstream")
 	}
 	if _, err := os.Stat(filepath.Join(dir, "PyPI", "PYSEC-1.json")); err != nil {
 		t.Errorf("included ecosystem missing: %v", err)
 	}
-	for _, eco := range []string{"GIT", "GSD", "SUSE", "Generic"} {
+	for _, eco := range []string{"GSD", "SUSE", "Generic"} {
 		if _, err := os.Stat(filepath.Join(dir, eco)); !errors.Is(err, os.ErrNotExist) {
 			t.Errorf("excluded ecosystem %s present on disk, stat err = %v", eco, err)
 		}
@@ -326,13 +326,13 @@ func TestFetcher_Fetch_SkipsDefaultExcludedEcosystems(t *testing.T) {
 func TestFetcher_Fetch_WithExcludedEcosystemsOverridesDefault(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ecosystems.txt", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("PyPI\nGIT\n"))
+		_, _ = w.Write([]byte("PyPI\nSUSE\n"))
 	})
 	mux.HandleFunc("/PyPI/all.zip", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write(zipBytes(t, map[string]string{"PYSEC-1.json": `{"id":"PYSEC-1"}`}))
 	})
-	mux.HandleFunc("/GIT/all.zip", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write(zipBytes(t, map[string]string{"CVE-2021-1.json": `{"id":"CVE-2021-1"}`}))
+	mux.HandleFunc("/SUSE/all.zip", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(zipBytes(t, map[string]string{"SUSE-SU-1.json": `{"id":"SUSE-SU-1"}`}))
 	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
@@ -347,14 +347,14 @@ func TestFetcher_Fetch_WithExcludedEcosystemsOverridesDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	// Default exclusion is replaced: GIT is fetched now.
-	if _, err := os.Stat(filepath.Join(dir, "GIT", "CVE-2021-1.json")); err != nil {
-		t.Errorf("override should fetch GIT: %v", err)
+	// Default exclusion is replaced: SUSE (default-excluded) is fetched now.
+	if _, err := os.Stat(filepath.Join(dir, "SUSE", "SUSE-SU-1.json")); err != nil {
+		t.Errorf("override should fetch SUSE: %v", err)
 	}
 }
 
 func TestExcluded(t *testing.T) {
-	excl := map[string]struct{}{"SUSE": {}, "GIT": {}}
+	excl := map[string]struct{}{"SUSE": {}, "Wolfi": {}}
 	tests := []struct {
 		eco  string
 		want bool
@@ -362,7 +362,7 @@ func TestExcluded(t *testing.T) {
 		{eco: "SUSE", want: true},
 		{eco: "SUSE:15", want: true},   // release-qualified upstream form
 		{eco: "openSUSE", want: false}, // prefix must not leak across names
-		{eco: "GIT", want: true},
+		{eco: "Wolfi", want: true},
 		{eco: "PyPI", want: false},
 	}
 	for _, tc := range tests {

@@ -76,12 +76,11 @@ func WithExcludedEcosystems(names []string) Option {
 }
 
 // defaultExcludedEcosystems is the curated noise cut (issue #124):
-// CVE→OSV auto-conversions that duplicate the directly-ingested
-// CVEListV5 (GIT, [EMPTY]), discontinued projects (GSD, UVI),
+// the ecosystem-less conversion bucket ([EMPTY]), discontinued
+// projects (GSD, UVI),
 // container-vendor distros, and out-of-scope distros/platforms.
 // Override with --osv-exclude / WithExcludedEcosystems.
 var defaultExcludedEcosystems = []string{
-	"GIT",
 	"[EMPTY]",
 	"GSD",
 	"UVI",
