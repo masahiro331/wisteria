@@ -190,6 +190,14 @@ type Severity struct {
     From   Provenance `json:"from"`
 }
 
+// Weakness は 1 source 由来の CWE 割り当て 1 件。同一 CWE-ID は dedup する (§8.4b)。
+// Description は CVE5 problemTypes の説明文 (OSV の cwe_ids は ID のみなので空)。
+type Weakness struct {
+    CWEID       string     `json:"cwe_id"`                // 例: "CWE-79"
+    Description string     `json:"description,omitempty"`
+    From        Provenance `json:"from"`
+}
+
 // AffectedRecord は 1 source 由来の affected 情報をそのまま保持する。
 type AffectedRecord struct {
     From Provenance      `json:"from"`
@@ -246,6 +254,7 @@ type UnifiedAdvisory struct {
     Descriptions []Description     `json:"descriptions"`          // 並列保持 (lang × source)
     References   []Reference       `json:"references"`            // dedup + 辞書順
     Severities   []Severity        `json:"severities"`            // dedup
+    Weaknesses   []Weakness        `json:"weaknesses,omitempty"`  // CWE-ID で dedup
     Affected     []AffectedRecord  `json:"affected"`              // 並列保持
     KEV          *KEVRecord        `json:"kev,omitempty"`         // KEV カタログ入りの場合のみ非 nil
     EPSS         *EPSSScore        `json:"epss,omitempty"`        // EPSS スコアがある場合のみ非 nil
@@ -328,6 +337,13 @@ KEV / EPSS はベンダー / advisory ではなく exploit シグナルなので
   - フォールバック key: `(Type, Score)` (Vector が無い古い CVSS など)
 - 同じ key で複数 source 由来のものを 1 件に寄せる場合、最優先 source の Provenance を残す
 - 並び順: 優先度配列順 → Type → Vector → Score。末尾 2 項は決定的な tie-breaker (1 つの CVE5 ファイルが `cvssV3_0` と `cvssV3_1` を両方持つケースなど、source rank と Type が一致する複数残存エントリがあっても出力順が再現可能になるように)
+
+### 8.4b Weaknesses (CWE)
+
+- 収集元: CVE5 `containers.{cna,adp}.problemTypes[].descriptions[]` の `cweId` 非空エントリ (ADP は §8.3 と同じ `#adp:<name>` 付き Provenance)、および OSV の typed `database_specific` が持つ CWE リスト (GHSA 系 `cwe_ids`、opam `cwe`)。`osv.OSVRecord` の必須メソッド `CWEIDs()` 経由で取り出す (AffectedAny と同じ compile-checked full coverage 方針)。
+- dedup key: **CWE-ID 単独**。severity と違い、複数 source が同じ CWE を主張するのは同一の主張なので、最優先 source のエントリ (通常 CVE5 の説明文付き) を残す
+- 並び順: 優先度配列順 → CWE-ID 辞書順 → 入力順
+- KEV の `cwes` は exploit シグナルの一部として `KEVRecord.CWEs` に残し、この merge には参加しない
 
 ### 8.5 Affected
 

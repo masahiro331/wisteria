@@ -160,6 +160,48 @@ func OSVAffectedRecords(rec osv.OSVRecord, from advisory.Provenance, source stri
 	return out
 }
 
+// OSVWeaknesses converts one OSV record's CWE identifiers (typed
+// database_specific: GHSA-family `cwe_ids`, opam `cwe`) into weakness
+// items. OSV carries bare IDs only, so Description stays empty.
+func OSVWeaknesses(rec osv.OSVRecord, from advisory.Provenance, source string) []weaknessItem {
+	if rec == nil {
+		return nil
+	}
+	ids := rec.CWEIDs()
+	if len(ids) == 0 {
+		return nil
+	}
+	out := make([]weaknessItem, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, weaknessItem{
+			Weakness: advisory.Weakness{CWEID: id, From: from},
+			source:   source,
+		})
+	}
+	return out
+}
+
+// CVEWeaknesses converts one CVE5 Container's problemTypes[] into
+// weakness items. Only entries with a non-empty cweId participate —
+// free-text problem types have no join key for the CWE-ID dedup. The
+// caller invokes it once for the CNA and once per ADP so each container
+// keeps its own Provenance.
+func CVEWeaknesses(in []cve.ProblemType, from advisory.Provenance) []weaknessItem {
+	var out []weaknessItem
+	for _, pt := range in {
+		for _, d := range pt.Descriptions {
+			if d.CWEID == "" {
+				continue
+			}
+			out = append(out, weaknessItem{
+				Weakness: advisory.Weakness{CWEID: d.CWEID, Description: d.Description, From: from},
+				source:   SourceCVEMitre,
+			})
+		}
+	}
+	return out
+}
+
 // CVEAffectedRecords does the same for one CVE5 Container's affected[].
 func CVEAffectedRecords(in []cve.Affected, from advisory.Provenance) []affectedItem {
 	out := make([]affectedItem, 0, len(in))

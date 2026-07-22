@@ -25,6 +25,7 @@ type RecordGeneric struct {
 
 func (r *RecordGeneric) Base() *osv.Record  { return &r.Record }
 func (r *RecordGeneric) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordGeneric) CWEIDs() []string   { return r.DatabaseSpecific.CWEIDs }
 
 type AffectedGeneric struct {
 	osv.AffectedBase
@@ -149,6 +150,7 @@ type RecordGIT struct {
 
 func (r *RecordGIT) Base() *osv.Record  { return &r.Record }
 func (r *RecordGIT) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordGIT) CWEIDs() []string   { return r.DatabaseSpecific.CWEIDs }
 
 type AffectedGIT struct {
 	osv.AffectedBase
@@ -278,6 +280,7 @@ type RecordGo struct {
 
 func (r *RecordGo) Base() *osv.Record  { return &r.Record }
 func (r *RecordGo) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordGo) CWEIDs() []string   { return r.DatabaseSpecific.CWEIDs }
 
 type AffectedGo struct {
 	osv.AffectedBase
@@ -375,6 +378,7 @@ type RecordOSSFuzz struct {
 
 func (r *RecordOSSFuzz) Base() *osv.Record  { return &r.Record }
 func (r *RecordOSSFuzz) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordOSSFuzz) CWEIDs() []string   { return nil }
 
 type AffectedOSSFuzz struct {
 	osv.AffectedBase
@@ -428,6 +432,7 @@ type RecordRoot struct {
 
 func (r *RecordRoot) Base() *osv.Record  { return &r.Record }
 func (r *RecordRoot) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordRoot) CWEIDs() []string   { return nil }
 
 type AffectedRoot struct {
 	osv.AffectedBase
@@ -491,6 +496,7 @@ type RecordNpm struct {
 
 func (r *RecordNpm) Base() *osv.Record  { return &r.Record }
 func (r *RecordNpm) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordNpm) CWEIDs() []string   { return r.DatabaseSpecific.CWEIDs }
 
 type AffectedNpm struct {
 	osv.AffectedBase

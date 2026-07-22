@@ -27,6 +27,7 @@ type RecordHex struct {
 
 func (r *RecordHex) Base() *osv.Record  { return &r.Record }
 func (r *RecordHex) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordHex) CWEIDs() []string   { return r.DatabaseSpecific.CWEIDs }
 
 type AffectedHex struct {
 	osv.AffectedBase
@@ -85,6 +86,7 @@ type RecordNuGet struct {
 
 func (r *RecordNuGet) Base() *osv.Record  { return &r.Record }
 func (r *RecordNuGet) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordNuGet) CWEIDs() []string   { return r.DatabaseSpecific.CWEIDs }
 
 type AffectedNuGet struct {
 	osv.AffectedBase
@@ -157,6 +159,7 @@ type RecordRubyGems struct {
 
 func (r *RecordRubyGems) Base() *osv.Record  { return &r.Record }
 func (r *RecordRubyGems) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordRubyGems) CWEIDs() []string   { return r.DatabaseSpecific.CWEIDs }
 
 type AffectedRubyGems struct {
 	osv.AffectedBase
@@ -229,6 +232,7 @@ type RecordPub struct {
 
 func (r *RecordPub) Base() *osv.Record  { return &r.Record }
 func (r *RecordPub) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordPub) CWEIDs() []string   { return r.DatabaseSpecific.CWEIDs }
 
 type AffectedPub struct {
 	osv.AffectedBase
@@ -284,6 +288,7 @@ type RecordSwiftURL struct {
 
 func (r *RecordSwiftURL) Base() *osv.Record  { return &r.Record }
 func (r *RecordSwiftURL) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordSwiftURL) CWEIDs() []string   { return r.DatabaseSpecific.CWEIDs }
 
 type AffectedSwiftURL struct {
 	osv.AffectedBase
@@ -339,6 +344,7 @@ type RecordGitHubActions struct {
 
 func (r *RecordGitHubActions) Base() *osv.Record  { return &r.Record }
 func (r *RecordGitHubActions) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordGitHubActions) CWEIDs() []string   { return r.DatabaseSpecific.CWEIDs }
 
 type AffectedGitHubActions struct {
 	osv.AffectedBase
@@ -394,6 +400,7 @@ type RecordPackagist struct {
 
 func (r *RecordPackagist) Base() *osv.Record  { return &r.Record }
 func (r *RecordPackagist) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordPackagist) CWEIDs() []string   { return r.DatabaseSpecific.CWEIDs }
 
 type AffectedPackagist struct {
 	osv.AffectedBase
@@ -460,6 +467,7 @@ type RecordCratesIO struct {
 
 func (r *RecordCratesIO) Base() *osv.Record  { return &r.Record }
 func (r *RecordCratesIO) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordCratesIO) CWEIDs() []string   { return r.DatabaseSpecific.CWEIDs }
 
 type AffectedCratesIO struct {
 	osv.AffectedBase

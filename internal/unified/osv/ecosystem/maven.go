@@ -20,6 +20,7 @@ type RecordMaven struct {
 
 func (r *RecordMaven) Base() *osv.Record  { return &r.Record }
 func (r *RecordMaven) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordMaven) CWEIDs() []string   { return r.DatabaseSpecific.CWEIDs }
 
 type AffectedMaven struct {
 	osv.AffectedBase

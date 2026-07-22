@@ -29,6 +29,7 @@ type RecordAlmaLinux struct {
 
 func (r *RecordAlmaLinux) Base() *osv.Record  { return &r.Record }
 func (r *RecordAlmaLinux) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordAlmaLinux) CWEIDs() []string   { return nil }
 
 type AffectedAlmaLinux struct {
 	osv.AffectedBase
@@ -76,6 +77,7 @@ type RecordAlpaquita struct {
 
 func (r *RecordAlpaquita) Base() *osv.Record  { return &r.Record }
 func (r *RecordAlpaquita) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordAlpaquita) CWEIDs() []string   { return nil }
 
 type AffectedAlpaquita struct {
 	osv.AffectedBase
@@ -121,6 +123,7 @@ type RecordAlpine struct {
 
 func (r *RecordAlpine) Base() *osv.Record  { return &r.Record }
 func (r *RecordAlpine) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordAlpine) CWEIDs() []string   { return nil }
 
 type AffectedAlpine struct {
 	osv.AffectedBase
@@ -166,6 +169,7 @@ type RecordAzureLinux struct {
 
 func (r *RecordAzureLinux) Base() *osv.Record  { return &r.Record }
 func (r *RecordAzureLinux) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordAzureLinux) CWEIDs() []string   { return nil }
 
 type AffectedAzureLinux struct {
 	osv.AffectedBase
@@ -211,6 +215,7 @@ type RecordBellSoftHardenedContainers struct {
 
 func (r *RecordBellSoftHardenedContainers) Base() *osv.Record  { return &r.Record }
 func (r *RecordBellSoftHardenedContainers) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordBellSoftHardenedContainers) CWEIDs() []string   { return nil }
 
 type AffectedBellSoftHardenedContainers struct {
 	osv.AffectedBase
@@ -258,6 +263,7 @@ type RecordCRAN struct {
 
 func (r *RecordCRAN) Base() *osv.Record  { return &r.Record }
 func (r *RecordCRAN) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordCRAN) CWEIDs() []string   { return nil }
 
 type AffectedCRAN struct {
 	osv.AffectedBase
@@ -303,6 +309,7 @@ type RecordCleanStart struct {
 
 func (r *RecordCleanStart) Base() *osv.Record  { return &r.Record }
 func (r *RecordCleanStart) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordCleanStart) CWEIDs() []string   { return nil }
 
 type AffectedCleanStart struct {
 	osv.AffectedBase
@@ -348,6 +355,7 @@ type RecordEcho struct {
 
 func (r *RecordEcho) Base() *osv.Record  { return &r.Record }
 func (r *RecordEcho) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordEcho) CWEIDs() []string   { return nil }
 
 type AffectedEcho struct {
 	osv.AffectedBase
@@ -393,6 +401,7 @@ type RecordGSD struct {
 
 func (r *RecordGSD) Base() *osv.Record  { return &r.Record }
 func (r *RecordGSD) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordGSD) CWEIDs() []string   { return nil }
 
 type AffectedGSD struct {
 	osv.AffectedBase
@@ -438,6 +447,7 @@ type RecordRedHat struct {
 
 func (r *RecordRedHat) Base() *osv.Record  { return &r.Record }
 func (r *RecordRedHat) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordRedHat) CWEIDs() []string   { return nil }
 
 type AffectedRedHat struct {
 	osv.AffectedBase
@@ -483,6 +493,7 @@ type RecordUVI struct {
 
 func (r *RecordUVI) Base() *osv.Record  { return &r.Record }
 func (r *RecordUVI) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordUVI) CWEIDs() []string   { return nil }
 
 type AffectedUVI struct {
 	osv.AffectedBase

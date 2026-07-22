@@ -59,6 +59,16 @@ type Severity struct {
 	From   Provenance `json:"from"`
 }
 
+// Weakness is one CWE assignment from one source. Same CWE-ID across
+// sources collapses (highest-priority source wins); Description is the
+// CVE5 problemTypes text and stays empty for OSV-sourced entries
+// (cwe_ids carries bare IDs only).
+type Weakness struct {
+	CWEID       string     `json:"cwe_id"`
+	Description string     `json:"description,omitempty"`
+	From        Provenance `json:"from"`
+}
+
 // AffectedRecord is one source's affected-package block, kept verbatim.
 // We do not try to reconcile OSV ranges against CVE5 platform/version
 // shapes here — the typed source struct is preserved so downstream stages
@@ -124,6 +134,7 @@ type UnifiedAdvisory struct {
 	Descriptions []Description     `json:"descriptions"`
 	References   []Reference       `json:"references"`
 	Severities   []Severity        `json:"severities"`
+	Weaknesses   []Weakness        `json:"weaknesses,omitempty"`
 	Affected     []AffectedRecord  `json:"affected"`
 	KEV          *KEVRecord        `json:"kev,omitempty"`
 	EPSS         *EPSSScore        `json:"epss,omitempty"`
