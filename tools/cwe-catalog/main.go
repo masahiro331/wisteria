@@ -108,7 +108,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("cwe-catalog: gofmt output: %v", err)
 	}
-	if err := os.WriteFile(*out, formatted, 0o644); err != nil {
+	if err := os.WriteFile(*out, formatted, 0o600); err != nil {
 		log.Fatalf("cwe-catalog: write %s: %v", *out, err)
 	}
 	fmt.Printf("wrote %s: %d entries (catalog v%s, %s)\n", *out, len(names), cat.Version, cat.Date)
