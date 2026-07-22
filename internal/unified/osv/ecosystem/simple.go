@@ -539,6 +539,7 @@ type RecordTuxCare struct {
 
 func (r *RecordTuxCare) Base() *osv.Record  { return &r.Record }
 func (r *RecordTuxCare) AffectedAny() []any { return affectedAny(r.Affected) }
+func (r *RecordTuxCare) CWEIDs() []string   { return nil }
 
 type AffectedTuxCare struct {
 	osv.AffectedBase
