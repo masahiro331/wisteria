@@ -1,4 +1,4 @@
-.PHONY: build test fmt vet tidy lint setup clean
+.PHONY: build test fmt vet tidy lint setup clean docker-build docker-pipeline
 
 BIN_DIR := bin
 BINARY  := $(BIN_DIR)/wisteria
@@ -41,3 +41,18 @@ setup:
 clean:
 	rm -f $(BINARY)
 	rmdir $(BIN_DIR) 2>/dev/null || true
+
+# One-shot pipeline container: fetch + unify run inside the Linux VM with
+# the cache on a named volume (out of reach of host antivirus file hooks);
+# only the final tarball lands on the host, in ./out/. See Dockerfile.
+DOCKER_IMAGE := wisteria-pipeline
+
+docker-build:
+	docker build -t $(DOCKER_IMAGE) .
+
+docker-pipeline: docker-build
+	mkdir -p out
+	docker run --rm \
+		-v wisteria-cache:/cache \
+		-v "$(CURDIR)/out:/out" \
+		$(DOCKER_IMAGE)
