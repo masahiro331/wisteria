@@ -46,6 +46,16 @@ func fixtureRecords() []advisory.UnifiedAdvisory {
 			},
 		},
 		{
+			PrimaryID: "CVE-2024-0003",
+			Provenances: []advisory.Provenance{
+				{Kind: advisory.SourceCVE, Path: "cve/z.json", ID: "CVE-2024-0003"},
+			},
+			Affected: []advisory.AffectedRecord{{
+				From: advisory.Provenance{Kind: advisory.SourceOSV, Path: "osv/Alpine/x.json", ID: "CVE-2024-0003"},
+				OSV:  osvAffected("Alpine:v3.17", "curl"),
+			}},
+		},
+		{
 			PrimaryID: "GO-2024-1234",
 			Provenances: []advisory.Provenance{
 				{Kind: advisory.SourceOSV, Path: "osv/Go/GO-2024-1234.json", ID: "GO-2024-1234"},
@@ -146,7 +156,7 @@ func TestFind_UnknownIDIsNotFound(t *testing.T) {
 func TestFindByPackage_Hit(t *testing.T) {
 	d := openDriver(t, buildTree(t, true))
 
-	got, err := d.FindByPackage(context.Background(), "PyPI", "django")
+	got, err := d.FindByPackage(context.Background(), advisory.EcosystemPyPI, "django")
 	if err != nil {
 		t.Fatalf("FindByPackage: %v", err)
 	}
@@ -158,7 +168,7 @@ func TestFindByPackage_Hit(t *testing.T) {
 func TestFindByPackage_SlashInName(t *testing.T) {
 	d := openDriver(t, buildTree(t, true))
 
-	got, err := d.FindByPackage(context.Background(), "Go", "github.com/foo/bar")
+	got, err := d.FindByPackage(context.Background(), advisory.EcosystemGo, "github.com/foo/bar")
 	if err != nil {
 		t.Fatalf("FindByPackage: %v", err)
 	}
@@ -167,10 +177,22 @@ func TestFindByPackage_SlashInName(t *testing.T) {
 	}
 }
 
+func TestFindByPackage_ReleaseSuffixedEcosystem(t *testing.T) {
+	d := openDriver(t, buildTree(t, true))
+
+	got, err := d.FindByPackage(context.Background(), advisory.EcosystemAlpine.WithSuffix("v3.17"), "curl")
+	if err != nil {
+		t.Fatalf("FindByPackage: %v", err)
+	}
+	if len(got) != 1 || got[0].PrimaryID != "CVE-2024-0003" {
+		t.Errorf("FindByPackage(Alpine:v3.17, curl) = %+v, want CVE-2024-0003", got)
+	}
+}
+
 func TestFindByPackage_MissIsEmptyNotError(t *testing.T) {
 	d := openDriver(t, buildTree(t, true))
 
-	got, err := d.FindByPackage(context.Background(), "PyPI", "no-such-package")
+	got, err := d.FindByPackage(context.Background(), advisory.EcosystemPyPI, "no-such-package")
 	if err != nil {
 		t.Fatalf("FindByPackage: %v", err)
 	}
@@ -202,7 +224,7 @@ func TestIndexlessTree_NonCVEAndPackageLookupsError(t *testing.T) {
 	if _, err := d.Find(context.Background(), "GHSA-shared-alias"); err == nil || errors.Is(err, db.ErrNotFound) {
 		t.Errorf("Find(alias) on index-less tree: err = %v, want explicit no-index error", err)
 	}
-	if _, err := d.FindByPackage(context.Background(), "PyPI", "django"); err == nil {
+	if _, err := d.FindByPackage(context.Background(), advisory.EcosystemPyPI, "django"); err == nil {
 		t.Error("FindByPackage on index-less tree: want explicit no-index error")
 	}
 }

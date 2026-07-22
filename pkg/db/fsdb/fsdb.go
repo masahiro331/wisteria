@@ -126,7 +126,7 @@ func (d *Driver) Find(ctx context.Context, id string) ([]advisory.UnifiedAdvisor
 
 // FindByPackage implements db.Driver. It requires the Stage 5 index; a
 // missing package entry is not an error, just no matches.
-func (d *Driver) FindByPackage(ctx context.Context, ecosystem, name string) ([]advisory.UnifiedAdvisory, error) {
+func (d *Driver) FindByPackage(ctx context.Context, ecosystem advisory.Ecosystem, name string) ([]advisory.UnifiedAdvisory, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -138,7 +138,7 @@ func (d *Driver) FindByPackage(ctx context.Context, ecosystem, name string) ([]a
 		return nil, errNoIndex
 	}
 
-	body, err := fs.ReadFile(d.fsys, indexer.PackagePath(ecosystem, name))
+	body, err := fs.ReadFile(d.fsys, indexer.PackagePath(string(ecosystem), name))
 	if errors.Is(err, fs.ErrNotExist) {
 		return []advisory.UnifiedAdvisory{}, nil
 	}
