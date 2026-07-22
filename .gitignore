@@ -4,5 +4,8 @@
 # Local download / scratch directories
 /tmp/
 
+# Pipeline container output (make docker-pipeline)
+/out/
+
 # Meeting notes (local only)
 /docs/meetings/
