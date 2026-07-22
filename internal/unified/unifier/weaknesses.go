@@ -3,6 +3,7 @@ package unifier
 import (
 	"cmp"
 
+	"github.com/masahiro331/wisteria/internal/unified/cwe"
 	"github.com/masahiro331/wisteria/pkg/advisory"
 )
 
@@ -17,8 +18,9 @@ type weaknessItem struct {
 // mergeWeaknesses dedups CWE assignments and sorts them by source
 // priority then CWE-ID. Dedup key is the CWE-ID alone: unlike
 // severities, two sources asserting the same CWE are the same claim,
-// so the entry from the highest-priority source wins (it usually also
-// carries the CVE5 description text).
+// so the entry from the highest-priority source wins. Every surviving
+// entry gets the official MITRE name from the embedded catalog, so the
+// output shape is identical whichever source asserted the CWE.
 func mergeWeaknesses(in []weaknessItem) []advisory.Weakness {
 	if len(in) == 0 {
 		return nil
@@ -46,6 +48,7 @@ func mergeWeaknesses(in []weaknessItem) []advisory.Weakness {
 	out := make([]advisory.Weakness, len(sorted))
 	for i, it := range sorted {
 		out[i] = it.Weakness
+		out[i].Name = cwe.Name(it.CWEID)
 	}
 	return out
 }

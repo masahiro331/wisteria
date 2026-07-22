@@ -59,14 +59,17 @@ type Severity struct {
 	From   Provenance `json:"from"`
 }
 
-// Weakness is one CWE assignment from one source. Same CWE-ID across
-// sources collapses (highest-priority source wins); Description is the
-// CVE5 problemTypes text and stays empty for OSV-sourced entries
-// (cwe_ids carries bare IDs only).
+// Weakness is one CWE assignment. Same CWE-ID across sources collapses
+// (highest-priority source wins). Name is the official MITRE catalog
+// title, attached uniformly at merge time regardless of which source
+// asserted the CWE — per-source free text is intentionally not kept, so
+// the unified shape does not vary by source. Name is empty only when
+// the identifier is unknown to the embedded catalog (malformed CNA
+// placeholders like "n/a", or IDs newer than the catalog generation).
 type Weakness struct {
-	CWEID       string     `json:"cwe_id"`
-	Description string     `json:"description,omitempty"`
-	From        Provenance `json:"from"`
+	CWEID string     `json:"cwe_id"`
+	Name  string     `json:"name,omitempty"`
+	From  Provenance `json:"from"`
 }
 
 // AffectedRecord is one source's affected-package block, kept verbatim.

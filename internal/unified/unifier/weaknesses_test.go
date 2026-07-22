@@ -11,6 +11,12 @@ import (
 	"github.com/masahiro331/wisteria/pkg/advisory/cve"
 )
 
+// Official MITRE names the tests below expect the merge to attach.
+const (
+	cweXSS  = "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+	cweSQLI = "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+)
+
 func TestMergeWeaknesses(t *testing.T) {
 	provCVE := advisory.Provenance{Kind: advisory.SourceCVE, Path: "cve/x.json", ID: "CVE-2024-0001"}
 	provPyPI := advisory.Provenance{Kind: advisory.SourceOSV, Path: "osv/PyPI/PYSEC-1.json", ID: "PYSEC-1"}
@@ -25,11 +31,11 @@ func TestMergeWeaknesses(t *testing.T) {
 			name: "same CWE-ID collapses keeping the higher-priority source",
 			in: []advisory.Weakness{
 				{CWEID: "CWE-79", From: provPyPI},
-				{CWEID: "CWE-79", Description: "XSS", From: provCVE},
+				{CWEID: "CWE-79", From: provCVE},
 			},
 			sources: []string{"osv.PyPI", SourceCVEMitre},
 			want: []advisory.Weakness{
-				{CWEID: "CWE-79", Description: "XSS", From: provCVE},
+				{CWEID: "CWE-79", Name: cweXSS, From: provCVE},
 			},
 		},
 		{
@@ -41,9 +47,19 @@ func TestMergeWeaknesses(t *testing.T) {
 			},
 			sources: []string{"osv.PyPI", SourceCVEMitre, "osv.PyPI"},
 			want: []advisory.Weakness{
-				{CWEID: "CWE-79", From: provCVE},
-				{CWEID: "CWE-20", From: provPyPI},
-				{CWEID: "CWE-89", From: provPyPI},
+				{CWEID: "CWE-79", Name: cweXSS, From: provCVE},
+				{CWEID: "CWE-20", Name: "Improper Input Validation", From: provPyPI},
+				{CWEID: "CWE-89", Name: cweSQLI, From: provPyPI},
+			},
+		},
+		{
+			name: "unknown CWE-ID keeps an empty name",
+			in: []advisory.Weakness{
+				{CWEID: "CWE-999999", From: provCVE},
+			},
+			sources: []string{SourceCVEMitre},
+			want: []advisory.Weakness{
+				{CWEID: "CWE-999999", From: provCVE},
 			},
 		},
 		{
@@ -81,8 +97,8 @@ func TestCVEWeaknesses_ExtractsCWEIDEntriesOnly(t *testing.T) {
 	got := CVEWeaknesses(in, prov)
 
 	want := []weaknessItem{
-		{Weakness: advisory.Weakness{CWEID: "CWE-79", Description: "Cross-site Scripting", From: prov}, source: SourceCVEMitre},
-		{Weakness: advisory.Weakness{CWEID: "CWE-89", Description: "SQL Injection", From: prov}, source: SourceCVEMitre},
+		{Weakness: advisory.Weakness{CWEID: "CWE-79", From: prov}, source: SourceCVEMitre},
+		{Weakness: advisory.Weakness{CWEID: "CWE-89", From: prov}, source: SourceCVEMitre},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("CVEWeaknesses = %+v, want %+v", got, want)

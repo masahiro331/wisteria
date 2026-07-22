@@ -183,9 +183,11 @@ func OSVWeaknesses(rec osv.OSVRecord, from advisory.Provenance, source string) [
 
 // CVEWeaknesses converts one CVE5 Container's problemTypes[] into
 // weakness items. Only entries with a non-empty cweId participate —
-// free-text problem types have no join key for the CWE-ID dedup. The
-// caller invokes it once for the CNA and once per ADP so each container
-// keeps its own Provenance.
+// free-text problem types have no join key for the CWE-ID dedup, and
+// the CNA's description text is intentionally dropped (the merge
+// attaches the official MITRE name instead, so the unified shape does
+// not vary by source). The caller invokes it once for the CNA and once
+// per ADP so each container keeps its own Provenance.
 func CVEWeaknesses(in []cve.ProblemType, from advisory.Provenance) []weaknessItem {
 	var out []weaknessItem
 	for _, pt := range in {
@@ -194,7 +196,7 @@ func CVEWeaknesses(in []cve.ProblemType, from advisory.Provenance) []weaknessIte
 				continue
 			}
 			out = append(out, weaknessItem{
-				Weakness: advisory.Weakness{CWEID: d.CWEID, Description: d.Description, From: from},
+				Weakness: advisory.Weakness{CWEID: d.CWEID, From: from},
 				source:   SourceCVEMitre,
 			})
 		}

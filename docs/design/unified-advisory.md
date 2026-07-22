@@ -190,12 +190,14 @@ type Severity struct {
     From   Provenance `json:"from"`
 }
 
-// Weakness は 1 source 由来の CWE 割り当て 1 件。同一 CWE-ID は dedup する (§8.4b)。
-// Description は CVE5 problemTypes の説明文 (OSV の cwe_ids は ID のみなので空)。
+// Weakness は CWE 割り当て 1 件。同一 CWE-ID は dedup する (§8.4b)。
+// Name は MITRE CWE カタログの正式タイトルで、どの source が主張したかに
+// よらず merge 時に一律付与する (source ごとの自由記述は保持しない)。
+// カタログ未収載 ID ("n/a" 等の CNA プレースホルダ) のみ空。
 type Weakness struct {
-    CWEID       string     `json:"cwe_id"`                // 例: "CWE-79"
-    Description string     `json:"description,omitempty"`
-    From        Provenance `json:"from"`
+    CWEID string     `json:"cwe_id"`         // 例: "CWE-79"
+    Name  string     `json:"name,omitempty"` // MITRE 正式タイトル
+    From  Provenance `json:"from"`
 }
 
 // AffectedRecord は 1 source 由来の affected 情報をそのまま保持する。
@@ -341,7 +343,8 @@ KEV / EPSS はベンダー / advisory ではなく exploit シグナルなので
 ### 8.4b Weaknesses (CWE)
 
 - 収集元: CVE5 `containers.{cna,adp}.problemTypes[].descriptions[]` の `cweId` 非空エントリ (ADP は §8.3 と同じ `#adp:<name>` 付き Provenance)、および OSV の typed `database_specific` が持つ CWE リスト (GHSA 系 `cwe_ids`、opam `cwe`)。`osv.OSVRecord` の必須メソッド `CWEIDs()` 経由で取り出す (AffectedAny と同じ compile-checked full coverage 方針)。
-- dedup key: **CWE-ID 単独**。severity と違い、複数 source が同じ CWE を主張するのは同一の主張なので、最優先 source のエントリ (通常 CVE5 の説明文付き) を残す
+- dedup key: **CWE-ID 単独**。severity と違い、複数 source が同じ CWE を主張するのは同一の主張なので、最優先 source のエントリを残す
+- `Name` は MITRE CWE カタログ (tools/cwe-catalog で `internal/unified/cwe` に生成、Weakness + Category + View 全収載) から merge 時に一律付与。CVE5 problemTypes の自由記述は **保持しない** — source によって説明文の有無・言い回しが変わると unified の抽象が漏れるため
 - 並び順: 優先度配列順 → CWE-ID 辞書順 → 入力順
 - KEV の `cwes` は exploit シグナルの一部として `KEVRecord.CWEs` に残し、この merge には参加しない
 
