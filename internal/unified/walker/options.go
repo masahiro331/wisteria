@@ -1,6 +1,9 @@
 package walker
 
-import "runtime"
+import (
+	"io"
+	"runtime"
+)
 
 // Option configures the Index walk. Defaults are chosen so the zero-arg
 // call site (`walker.Index(ctx, root)`) keeps existing behavior modulo
@@ -12,6 +15,10 @@ type config struct {
 	// is filename-only and not parallelized — the bottleneck Index used
 	// to have was OSV body unmarshal, so the knob targets just that.
 	concurrency int
+	// warnLog receives one line per file the walk skipped because it
+	// became inaccessible (endpoint-protection quarantine, vanish). nil
+	// means skip silently.
+	warnLog io.Writer
 }
 
 // WithConcurrency sets the OSV-parse worker pool size. Values <= 0 fall
@@ -23,6 +30,15 @@ func WithConcurrency(n int) Option {
 			c.concurrency = n
 		}
 	}
+}
+
+// WithWarnLog sets the destination for skip warnings. The walk skips
+// (instead of aborting on) OSV files that turn out to be unreadable for
+// environmental reasons — EPERM/EACCES from an endpoint-protection
+// quarantine of malicious-PoC advisories (MAL-* records), or the file
+// vanishing between WalkDir and the read. A nil writer skips silently.
+func WithWarnLog(w io.Writer) Option {
+	return func(c *config) { c.warnLog = w }
 }
 
 func defaultConcurrency() int {

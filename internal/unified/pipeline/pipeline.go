@@ -62,9 +62,11 @@ func Run(ctx context.Context, cacheDir string, opts Options, w io.Writer) error 
 	}
 	sourcesRoot := filepath.Join(root, cachedir.SourcesSubdir)
 
-	// Stage 1: build the index.
+	// Stage 1: build the index. Quarantined / vanished source files are
+	// warned about on w and skipped rather than aborting the build.
 	t0 := time.Now()
-	index, err := walker.Index(ctx, sourcesRoot, walker.WithConcurrency(conc))
+	index, err := walker.Index(ctx, sourcesRoot,
+		walker.WithConcurrency(conc), walker.WithWarnLog(w))
 	if err != nil {
 		return fmt.Errorf("walker.Index: %w", err)
 	}

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/masahiro331/wisteria/internal/unified"
@@ -332,4 +333,67 @@ func wantSignatures(entries []entryWant) []string {
 		out[i] = string(e.kind) + "|" + e.source + "|" + e.sourceID + "|" + e.relPath
 	}
 	return out
+}
+
+// TestIndex_SkipsUnreadableOSVFileWithWarning covers endpoint-protection
+// quarantine: Microsoft Defender strips read permission from (or removes)
+// advisories that embed malicious PoC content (MAL-* records). One
+// quarantined file must not abort the whole walk — it is warned about
+// and left out of the index.
+func TestIndex_SkipsUnreadableOSVFileWithWarning(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "osv/PyPI/PYSEC-2024-1.json", `{"id":"PYSEC-2024-1"}`)
+	writeFile(t, root, "osv/PyPI/MAL-2026-1262.json", `{"id":"MAL-2026-1262"}`)
+	quarantined := filepath.Join(root, "osv", "PyPI", "MAL-2026-1262.json")
+	if err := os.Chmod(quarantined, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(quarantined, 0o644) })
+
+	var warns strings.Builder
+	got, err := walker.Index(context.Background(), root, walker.WithWarnLog(&warns))
+	if err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+	if _, ok := got["MAL-2026-1262"]; ok {
+		t.Error("quarantined file must not enter the index")
+	}
+	if _, ok := got["PYSEC-2024-1"]; !ok {
+		t.Error("readable sibling must still be indexed")
+	}
+	if !strings.Contains(warns.String(), "MAL-2026-1262.json") {
+		t.Errorf("warning must name the skipped file; got %q", warns.String())
+	}
+}
+
+// TestIndex_NilWarnLogStillSkips guards the default: no warn writer
+// configured means silent skip, not a nil-deref or an abort.
+func TestIndex_NilWarnLogStillSkips(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "osv/PyPI/MAL-2026-1262.json", `{"id":"MAL-2026-1262"}`)
+	quarantined := filepath.Join(root, "osv", "PyPI", "MAL-2026-1262.json")
+	if err := os.Chmod(quarantined, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(quarantined, 0o644) })
+
+	got, err := walker.Index(context.Background(), root)
+	if err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("index = %v, want empty", got)
+	}
+}
+
+// TestIndex_MalformedJSONStillAborts pins the boundary of the skip
+// policy: only inaccessible files (quarantine / vanish) are skipped;
+// data corruption keeps failing loud.
+func TestIndex_MalformedJSONStillAborts(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "osv/PyPI/bad.json", `{not json`)
+
+	if _, err := walker.Index(context.Background(), root); err == nil {
+		t.Fatal("expected error for malformed JSON")
+	}
 }
