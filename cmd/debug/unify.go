@@ -44,7 +44,7 @@ func newUnifyCmd() *cobra.Command {
 			}
 			sourcesRoot := filepath.Join(root, cachedir.SourcesSubdir)
 
-			idx, err := walker.Index(cmd.Context(), sourcesRoot)
+			idx, err := walker.Index(cmd.Context(), sourcesRoot, walker.WithWarnLog(cmd.ErrOrStderr()))
 			if err != nil {
 				return fmt.Errorf("walker.Index: %w", err)
 			}

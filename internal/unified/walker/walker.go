@@ -12,15 +12,21 @@
 //
 // KEV / EPSS are handled in Stage 4 (annotator), not here.
 //
-// Error policy: any unreadable / malformed advisory file aborts the whole
-// walk. The index is intermediate state — re-running is cheap, so failing
-// loud beats silently dropping records.
+// Error policy: a malformed advisory file aborts the whole walk — the
+// index is intermediate state, re-running is cheap, and failing loud
+// beats silently dropping records. The one exception is a file that
+// became inaccessible after WalkDir saw it (endpoint protection
+// quarantining a malicious-PoC advisory → EPERM, or the file
+// vanishing → ENOENT): that is an environmental condition on a single
+// record, so it is warned about (WithWarnLog) and skipped.
 package walker
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -61,7 +67,7 @@ func Index(ctx context.Context, sourcesRoot string, opts ...Option) (map[string]
 
 	out := make(map[string][]unified.IndexEntry)
 
-	if err := walkOSV(ctx, sourcesRoot, out, cfg.concurrency); err != nil {
+	if err := walkOSV(ctx, sourcesRoot, out, cfg); err != nil {
 		return nil, err
 	}
 	if err := walkCVE(ctx, sourcesRoot, out); err != nil {
@@ -91,7 +97,8 @@ type osvParseJob struct {
 	ecosystem      string
 }
 
-func walkOSV(ctx context.Context, sourcesRoot string, out map[string][]unified.IndexEntry, concurrency int) error {
+func walkOSV(ctx context.Context, sourcesRoot string, out map[string][]unified.IndexEntry, cfg config) error {
+	warn := &warnLogger{w: cfg.warnLog}
 	osvRoot := filepath.Join(sourcesRoot, "osv")
 	if _, err := os.Stat(osvRoot); os.IsNotExist(err) {
 		return nil
@@ -112,9 +119,9 @@ func walkOSV(ctx context.Context, sourcesRoot string, out map[string][]unified.I
 	// Stage C: merge worker output into `out` in lexical order so the
 	// per-PrimaryID entry list matches the sequential walker exactly.
 	g, gctx := errgroup.WithContext(ctx)
-	g.SetLimit(concurrency)
+	g.SetLimit(cfg.concurrency)
 
-	results := make(chan osvParseResult, concurrency*2)
+	results := make(chan osvParseResult, cfg.concurrency*2)
 	var (
 		mergeWG sync.WaitGroup
 		buffer  []osvParseResult
@@ -131,7 +138,7 @@ func walkOSV(ctx context.Context, sourcesRoot string, out map[string][]unified.I
 			return err
 		}
 		g.Go(func() error {
-			return parseOSVFile(gctx, rootFS, job, results)
+			return parseOSVFile(gctx, rootFS, job, results, warn)
 		})
 		return nil
 	})
@@ -209,11 +216,37 @@ func osvWalkStep(ctx context.Context, sourcesRoot, osvRoot, path string, d fs.Di
 	}, false, nil
 }
 
+// warnLogger serializes skip warnings from concurrent parse workers.
+// A nil writer drops them.
+type warnLogger struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+func (l *warnLogger) warnf(format string, a ...any) {
+	if l.w == nil {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	fmt.Fprintf(l.w, format, a...)
+}
+
 // parseOSVFile is the worker-pool half: ReadFile + json.Unmarshal +
 // PrimaryID resolution. Sends one osvParseResult per file into results,
 // or returns the parse error so the errgroup can cancel siblings.
-func parseOSVFile(ctx context.Context, rootFS *os.Root, job osvParseJob, results chan<- osvParseResult) error {
+//
+// A file that became inaccessible after WalkDir saw it — endpoint
+// protection quarantining a malicious-PoC advisory (EPERM/EACCES) or
+// the file vanishing (ENOENT) — is warned about and skipped instead of
+// aborting the walk: it is an environmental condition on one record,
+// not corruption of the tree. Everything else keeps failing loud.
+func parseOSVFile(ctx context.Context, rootFS *os.Root, job osvParseJob, results chan<- osvParseResult, warn *warnLogger) error {
 	body, err := rootFS.ReadFile(job.relUnderOSV)
+	if errors.Is(err, fs.ErrPermission) || errors.Is(err, fs.ErrNotExist) {
+		warn.warnf("walker: skip %s: %v\n", job.absPath, err)
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("walker: read %s: %w", job.absPath, err)
 	}
