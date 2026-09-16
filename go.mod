@@ -1,12 +1,12 @@
 module github.com/masahiro331/wisteria
 
-go 1.25.7
+go 1.26.0
 
 require (
-	github.com/pandatix/go-cvss v0.6.2
+	github.com/pandatix/go-cvss v0.6.4
 	github.com/spf13/cobra v1.10.2
-	github.com/vbauerster/mpb/v8 v8.13.0
-	golang.org/x/sync v0.22.0
+	github.com/vbauerster/mpb/v8 v8.16.1
+	golang.org/x/sync v0.23.0
 )
 
 require (
@@ -14,7 +14,8 @@ require (
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/mattn/go-runewidth v0.0.24 // indirect
+	github.com/mattn/go-runewidth v0.0.28 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
+	github.com/vbauerster/cupwriter v0.0.4 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )
