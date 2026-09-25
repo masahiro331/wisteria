@@ -130,6 +130,19 @@ type KEVRecord struct {
 // a single CVE-ID can have multiple EDB-IDs (different platforms,
 // different researchers), so UnifiedAdvisory.Exploits is a slice and
 // the catalog's natural row order is preserved.
+// FixCommit is a commit that fixes the vulnerability, derived deterministically
+// from data the advisory already carries: an OSV GIT range's fixed event, or a
+// GitHub commit URL among the references. It is the vulnerability-fixing-commit
+// (VFC) signal — the deterministic layer only. Repo is "owner/name"; SHA is the
+// fixing commit; URL is the source link the commit was taken from. From records
+// which source and reference produced it, so debug tooling can pivot back.
+type FixCommit struct {
+	From Provenance `json:"from"`
+	Repo string     `json:"repo,omitempty"`
+	SHA  string     `json:"sha"`
+	URL  string     `json:"url,omitempty"`
+}
+
 type ExploitDBRecord struct {
 	From          Provenance `json:"from"`
 	ID            int        `json:"id"`             // EDB-ID
@@ -161,5 +174,6 @@ type UnifiedAdvisory struct {
 	KEV          *KEVRecord        `json:"kev,omitempty"`
 	EPSS         *EPSSScore        `json:"epss,omitempty"`
 	Exploits     []ExploitDBRecord `json:"exploits,omitempty"`
+	FixCommits   []FixCommit       `json:"fix_commits,omitempty"`
 	Provenances  []Provenance      `json:"provenances"`
 }
