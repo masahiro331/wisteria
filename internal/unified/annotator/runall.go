@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// RunAll runs the three Stage 4 annotators in order — KEV, EPSS,
-// ExploitDB — against an existing Stage 3 unified/ tree. Per-stage
+// RunAll runs the Stage 4 annotators in order — KEV, EPSS,
+// ExploitDB, FixCommit — against an existing Stage 3 unified/ tree. Per-stage
 // elapsed time is written to w; passing nil for w is fine for tests /
 // scripts that don't want output.
 //
@@ -35,6 +35,7 @@ func RunAll(ctx context.Context, sourcesRoot, outDir string, w io.Writer, linePr
 		{"kev", AnnotateKEV},
 		{"epss", AnnotateEPSS},
 		{"exploitdb", AnnotateExploitDB},
+		{"fixcommit", AnnotateFixCommits},
 	}
 	for _, s := range stages {
 		t := time.Now()
