@@ -205,10 +205,12 @@ var allSources = []fetchSource{
 }
 
 // fetchAll runs the sources in order. A required source's error ends the
-// run; an optional one's is written to errOut as a warning.
-func fetchAll(ctx context.Context, opts fetchOptions, sources []fetchSource, out, errOut io.Writer) error {
+// run; an optional one's is written to errOut as a warning. newOpts builds
+// each source's options afresh: a fetcher ends its progress tracker with
+// Wait, so sources must not share one.
+func fetchAll(ctx context.Context, newOpts func() fetchOptions, sources []fetchSource, out, errOut io.Writer) error {
 	for _, s := range sources {
-		f := s.factory(opts)
+		f := s.factory(newOpts())
 		dir, err := fetchOne(ctx, f, s.optional)
 		if err != nil {
 			if s.optional {
@@ -237,7 +239,8 @@ func newFetchAllCmd() *cobra.Command {
 		Use:   "all",
 		Short: "Fetch every supported source",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return fetchAll(cmd.Context(), optionsFromCmd(cmd), allSources, cmd.OutOrStdout(), cmd.ErrOrStderr())
+			newOpts := func() fetchOptions { return optionsFromCmd(cmd) }
+			return fetchAll(cmd.Context(), newOpts, allSources, cmd.OutOrStdout(), cmd.ErrOrStderr())
 		},
 	}
 }

@@ -165,7 +165,7 @@ func TestFetchAll_OptionalSourceFailureContinues(t *testing.T) {
 			stubSource("vulncheck-kev", failure, true, &calls),
 			stubSource("epss", nil, false, &calls),
 		}
-		if err := fetchAll(context.Background(), fetchOptions{}, sources, &out, &errOut); err != nil {
+		if err := fetchAll(context.Background(), func() fetchOptions { return fetchOptions{} }, sources, &out, &errOut); err != nil {
 			t.Fatalf("fetchAll: %v", err)
 		}
 		if strings.Join(calls, ",") != "kev,vulncheck-kev,epss" {
@@ -183,7 +183,7 @@ func TestFetchAll_RequiredSourceFailureStops(t *testing.T) {
 		stubSource("kev", errors.New("boom"), false, &calls),
 		stubSource("epss", nil, false, &calls),
 	}
-	err := fetchAll(context.Background(), fetchOptions{}, sources, io.Discard, io.Discard)
+	err := fetchAll(context.Background(), func() fetchOptions { return fetchOptions{} }, sources, io.Discard, io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "kev: boom") || len(calls) != 1 {
 		t.Errorf("err = %v, calls = %v", err, calls)
 	}
@@ -244,7 +244,9 @@ func TestFetchAll_OptionalSourceTimesOut(t *testing.T) {
 		stubSource("epss", nil, false, &calls),
 	}
 	done := make(chan error, 1)
-	go func() { done <- fetchAll(context.Background(), fetchOptions{}, sources, io.Discard, &errOut) }()
+	go func() {
+		done <- fetchAll(context.Background(), func() fetchOptions { return fetchOptions{} }, sources, io.Discard, &errOut)
+	}()
 	select {
 	case err := <-done:
 		if err != nil {
@@ -255,5 +257,25 @@ func TestFetchAll_OptionalSourceTimesOut(t *testing.T) {
 	}
 	if strings.Join(calls, ",") != "vulncheck-kev,epss" || !strings.Contains(errOut.String(), "warning: vulncheck-kev:") {
 		t.Errorf("calls = %v, stderr = %q", calls, errOut.String())
+	}
+}
+
+// Each source gets its own options, so each gets its own progress tracker:
+// a fetcher ends its tracker with Wait, and a shared one panics on the next
+// source's bar.
+func TestFetchAll_FreshOptionsPerSource(t *testing.T) {
+	var calls []string
+	built := 0
+	newOpts := func() fetchOptions { built++; return fetchOptions{} }
+	sources := []fetchSource{
+		stubSource("kev", nil, false, &calls),
+		stubSource("vulncheck-kev", nil, true, &calls),
+		stubSource("epss", nil, false, &calls),
+	}
+	if err := fetchAll(context.Background(), newOpts, sources, io.Discard, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	if built != 3 {
+		t.Errorf("options built %d times, want once per source (3)", built)
 	}
 }

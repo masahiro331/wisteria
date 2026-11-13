@@ -189,7 +189,7 @@ func TestRunAll_VulnCheckKEVRunsAfterKEV(t *testing.T) {
 	}
 	out := buf.String()
 	k, v, e := strings.Index(out, "annotate kev:"), strings.Index(out, "annotate vulncheck-kev:"), strings.Index(out, "annotate epss:")
-	if k < 0 || v < 0 || e < 0 || !(k < v && v < e) {
+	if k < 0 || v < 0 || e < 0 || k >= v || v >= e {
 		t.Errorf("stage order wrong:\n%s", out)
 	}
 }
