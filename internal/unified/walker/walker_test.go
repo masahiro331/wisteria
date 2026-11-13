@@ -386,6 +386,35 @@ func TestIndex_NilWarnLogStillSkips(t *testing.T) {
 	}
 }
 
+// TestIndex_SkipsUnknownOSVEcosystemWithWarning covers an ecosystem
+// upstream added after the typed schema was written (Red Hat Lightwell
+// appeared on 2026-10-27 and failed every daily build until it was
+// known). Stage 2 cannot parse records of an ecosystem it has no type
+// for, so the whole directory is left out of the index — with one
+// warning naming it — instead of aborting the build for every other
+// ecosystem.
+func TestIndex_SkipsUnknownOSVEcosystemWithWarning(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "osv/PyPI/PYSEC-2024-1.json", `{"id":"PYSEC-2024-1","aliases":["CVE-2024-0001"]}`)
+	writeFile(t, root, "osv/Red Hat Lightwell/RHLW-2026-1.json", `{"id":"RHLW-2026-1","aliases":["CVE-2024-0001"]}`)
+	writeFile(t, root, "osv/Red Hat Lightwell/RHLW-2026-2.json", `{"id":"RHLW-2026-2"}`)
+
+	var warns strings.Builder
+	got, err := walker.Index(context.Background(), root, walker.WithWarnLog(&warns))
+	if err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+	if _, ok := got["RHLW-2026-2"]; ok {
+		t.Error("a record of an unknown ecosystem must not enter the index")
+	}
+	if entries := got["CVE-2024-0001"]; len(entries) != 1 || entries[0].SourceID != "PYSEC-2024-1" {
+		t.Errorf("CVE-2024-0001 entries = %+v, want only the PyPI record", entries)
+	}
+	if w := warns.String(); !strings.Contains(w, "Red Hat Lightwell") || strings.Count(w, "\n") != 1 {
+		t.Errorf("want one warning naming the skipped ecosystem; got %q", w)
+	}
+}
+
 // TestIndex_MalformedJSONStillAborts pins the boundary of the skip
 // policy: only inaccessible files (quarantine / vanish) are skipped;
 // data corruption keeps failing loud.

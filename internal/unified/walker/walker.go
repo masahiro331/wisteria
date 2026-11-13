@@ -18,7 +18,10 @@
 // became inaccessible after WalkDir saw it (endpoint protection
 // quarantining a malicious-PoC advisory → EPERM, or the file
 // vanishing → ENOENT): that is an environmental condition on a single
-// record, so it is warned about (WithWarnLog) and skipped.
+// record, so it is warned about (WithWarnLog) and skipped. Likewise an
+// OSV ecosystem directory the typed schema does not know yet (upstream
+// added it) is warned about and left out whole, so one new ecosystem
+// does not stop the daily build for all the others.
 package walker
 
 import (
@@ -35,6 +38,7 @@ import (
 	"sync"
 
 	"github.com/masahiro331/wisteria/internal/unified"
+	"github.com/masahiro331/wisteria/internal/unified/osv"
 	"github.com/masahiro331/wisteria/pkg/advisory"
 	"golang.org/x/sync/errgroup"
 )
@@ -133,6 +137,10 @@ func walkOSV(ctx context.Context, sourcesRoot string, out map[string][]unified.I
 	})
 
 	walkErr := filepath.WalkDir(osvRoot, func(path string, d fs.DirEntry, err error) error {
+		if eco, ok := unknownEcosystemDir(osvRoot, path, d, err); ok {
+			warn.warnf("walker: skip OSV ecosystem %q: no typed schema for it yet (%s not indexed)\n", eco, path)
+			return fs.SkipDir
+		}
 		job, skip, err := osvWalkStep(gctx, sourcesRoot, osvRoot, path, d, err)
 		if err != nil || skip {
 			return err
@@ -214,6 +222,23 @@ func osvWalkStep(ctx context.Context, sourcesRoot, osvRoot, path string, d fs.Di
 		absPath:        path,
 		ecosystem:      strings.ReplaceAll(parts[0], " ", "_"),
 	}, false, nil
+}
+
+// unknownEcosystemDir reports whether path is an ecosystem directory
+// directly under osvRoot whose name the typed OSV schema does not know.
+// Stage 2 cannot parse such records, so the walk leaves the directory
+// out instead of indexing entries that would abort the merge: an
+// ecosystem added upstream must not stop the build for every other
+// one. The skip is warned about, so the missing type stays visible.
+func unknownEcosystemDir(osvRoot, path string, d fs.DirEntry, walkErr error) (string, bool) {
+	if walkErr != nil || !d.IsDir() || filepath.Dir(path) != osvRoot {
+		return "", false
+	}
+	name := d.Name()
+	if _, err := osv.EcosystemFromString(name); err != nil {
+		return name, true
+	}
+	return "", false
 }
 
 // warnLogger serializes skip warnings from concurrent parse workers.
