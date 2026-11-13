@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -112,18 +113,26 @@ func (f *Fetcher) Fetch(ctx context.Context) (string, error) {
 	if f.token == "" {
 		return "", ErrNoToken
 	}
-	b, err := f.backupInfo(ctx)
-	if err != nil {
-		return "", err
-	}
 	tmp, err := os.MkdirTemp(dir, ".download-")
 	if err != nil {
 		return "", err
 	}
 	defer os.RemoveAll(tmp)
 	zipPath := filepath.Join(tmp, "backup.zip")
-	if err := f.download(ctx, b.Data[0].URL, b.Data[0].SHA256, zipPath); err != nil {
-		return "", err
+	// The signed URL lives 15 minutes and a failed download is not retried
+	// against it, so a second attempt asks the API for a fresh one.
+	for attempt := 1; ; attempt++ {
+		b, err := f.backupInfo(ctx)
+		if err != nil {
+			return "", err
+		}
+		err = f.download(ctx, b.Data[0].URL, b.Data[0].SHA256, zipPath)
+		if err == nil {
+			break
+		}
+		if attempt == downloadAttempts || ctx.Err() != nil {
+			return "", err
+		}
 	}
 	extracted := filepath.Join(tmp, "x")
 	if err := archive.Zip(zipPath, extracted); err != nil {
@@ -133,10 +142,30 @@ func (f *Fetcher) Fetch(ctx context.Context) (string, error) {
 	if _, err := os.Stat(src); err != nil {
 		return "", fmt.Errorf("vulncheck-kev: backup has no %s: %w", vulncheckkev.CatalogFilename, err)
 	}
+	// Parse before placing it: a catalog unify cannot read would fail the
+	// whole rebuild, while a fetch error is only a warning in `fetch all`.
+	if err := validCatalog(src); err != nil {
+		return "", err
+	}
 	if err := os.Rename(src, filepath.Join(dir, vulncheckkev.CatalogFilename)); err != nil {
 		return "", err
 	}
 	return dir, nil
+}
+
+// downloadAttempts is how many signed URLs one Fetch tries.
+const downloadAttempts = 2
+
+func validCatalog(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if _, err := vulncheckkev.Read(f); err != nil {
+		return fmt.Errorf("vulncheck-kev: unreadable catalog: %w", err)
+	}
+	return nil
 }
 
 // clearDir empties dir, keeping dir itself.
@@ -180,14 +209,25 @@ func (f *Fetcher) backupInfo(ctx context.Context) (backup, error) {
 
 // download fetches the backup zip to dest and checks its sha256. The signed
 // URL is fetched without the API token: it is a different host.
-func (f *Fetcher) download(ctx context.Context, url, wantSum, dest string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+//
+// Errors name the host only: the URL's query signs the request and works as
+// a credential until it expires.
+func (f *Fetcher) download(ctx context.Context, rawURL, wantSum, dest string) error {
+	host := "the backup host"
+	if u, err := url.Parse(rawURL); err == nil && u.Host != "" {
+		host = u.Host
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, http.NoBody)
 	if err != nil {
-		return err
+		return fmt.Errorf("vulncheck-kev: download backup from %s: bad URL", host)
 	}
 	resp, err := xhttp.DoWithRetry(ctx, f.client, req, f.retry)
 	if err != nil {
-		return err
+		var ue *url.Error
+		if errors.As(err, &ue) {
+			err = ue.Err
+		}
+		return fmt.Errorf("vulncheck-kev: download backup from %s: %w", host, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {

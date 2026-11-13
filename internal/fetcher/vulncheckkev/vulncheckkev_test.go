@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/masahiro331/wisteria/internal/fetcher"
@@ -49,6 +50,10 @@ type backupServer struct {
 	apiAuth       string // Authorization the API call carried
 	downloadAuth  string // Authorization the download carried
 	downloadCalls int
+	apiCalls      int
+	failDownloads int    // answer this many downloads with 403
+	dropDownloads bool   // close download connections without a response
+	downloadQuery string // query appended to the advertised download URL
 }
 
 func newBackupServer(t *testing.T, zipBody []byte) *backupServer {
@@ -57,6 +62,7 @@ func newBackupServer(t *testing.T, zipBody []byte) *backupServer {
 	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v3/backup/vulncheck-kev":
+			s.apiCalls++
 			s.apiAuth = r.Header.Get("Authorization")
 			if s.apiStatus != http.StatusOK {
 				w.WriteHeader(s.apiStatus)
@@ -68,10 +74,21 @@ func newBackupServer(t *testing.T, zipBody []byte) *backupServer {
 				sum = hex.EncodeToString(h[:])
 			}
 			fmt.Fprintf(w, `{"_meta":{"index":"vulncheck-kev"},"data":[{"filename":"vulncheck-kev-1.zip","sha256":%q,"date_added":"2026-11-13T05:57:12Z","url":%q}]}`,
-				sum, s.URL+"/download")
+				sum, s.URL+"/download?"+s.downloadQuery)
 		case "/download":
 			s.downloadCalls++
 			s.downloadAuth = r.Header.Get("Authorization")
+			if s.dropDownloads {
+				hj, _ := w.(http.Hijacker)
+				conn, _, _ := hj.Hijack()
+				_ = conn.Close()
+				return
+			}
+			if s.failDownloads > 0 {
+				s.failDownloads--
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
 			_, _ = w.Write(s.zip)
 		default:
 			http.NotFound(w, r)
@@ -185,5 +202,61 @@ func TestFetch_AuthErrorRemovesStaleCatalog(t *testing.T) {
 	}
 	if _, err := os.Stat(catalogPath(cache)); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("stale catalog left behind: %v", err)
+	}
+}
+
+// A catalog that downloads but does not parse is a fetch error, so `fetch
+// all` warns and unify never sees it.
+func TestFetch_UnparsableCatalogIsAnError(t *testing.T) {
+	s := newBackupServer(t, zipWith(t, map[string]string{vulncheckkev.CatalogFilename: `{"not":"an array"}`}))
+	cache := t.TempDir()
+	if _, err := newFetcher(s, cache, "test-token").Fetch(context.Background()); err == nil {
+		t.Fatal("want a parse error")
+	}
+	if _, err := os.Stat(catalogPath(cache)); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("catalog placed: %v", err)
+	}
+}
+
+func TestFetch_ZipSlipIsRejected(t *testing.T) {
+	s := newBackupServer(t, zipWith(t, map[string]string{"../evil.json": "[]", vulncheckkev.CatalogFilename: catalogBody}))
+	cache := t.TempDir()
+	if _, err := newFetcher(s, cache, "test-token").Fetch(context.Background()); err == nil {
+		t.Fatal("want an error for a zip-slip entry")
+	}
+	if _, err := os.Stat(catalogPath(cache)); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("catalog placed: %v", err)
+	}
+	matches, _ := filepath.Glob(filepath.Join(cache, "sources", "*.json"))
+	if len(matches) != 0 {
+		t.Errorf("file written outside the source dir: %v", matches)
+	}
+}
+
+// A failed download asks the API for a fresh signed URL once more.
+func TestFetch_RetriesWithAFreshURL(t *testing.T) {
+	s := newBackupServer(t, zipWith(t, map[string]string{vulncheckkev.CatalogFilename: catalogBody}))
+	s.failDownloads = 1
+	cache := t.TempDir()
+	if _, err := newFetcher(s, cache, "test-token").Fetch(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if s.apiCalls != 2 || s.downloadCalls != 2 {
+		t.Errorf("api calls = %d, download calls = %d; want 2 and 2", s.apiCalls, s.downloadCalls)
+	}
+}
+
+// A download error names the host only: the signed URL's query is a
+// credential for 15 minutes and must not reach the logs.
+func TestFetch_DownloadErrorHidesTheSignedQuery(t *testing.T) {
+	s := newBackupServer(t, nil)
+	s.downloadQuery = "X-Amz-Signature=secret-signature"
+	s.dropDownloads = true
+	_, err := newFetcher(s, t.TempDir(), "test-token").Fetch(context.Background())
+	if err == nil {
+		t.Fatal("want a download error")
+	}
+	if strings.Contains(err.Error(), "secret-signature") || strings.Contains(err.Error(), "X-Amz") {
+		t.Errorf("error leaks the signed URL: %v", err)
 	}
 }

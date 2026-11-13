@@ -19,7 +19,7 @@ import (
 // wants no extra prefix). Pass "" for the no-prefix shape.
 //
 // Order is fixed: KEV first (~1500 entries) to surface missing-target
-// issues quickly, then EPSS, then ExploitDB. The three annotators
+// issues quickly, then VulnCheck KEV, EPSS, ExploitDB. The annotators
 // write disjoint fields so a different order would be functionally
 // equivalent — but the timing log is easier to read when the cheapest
 // stage runs first.

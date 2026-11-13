@@ -193,3 +193,42 @@ func TestRunAll_VulnCheckKEVRunsAfterKEV(t *testing.T) {
 		t.Errorf("stage order wrong:\n%s", out)
 	}
 }
+
+// An undated duplicate does not displace a dated one, and a CVE listed twice
+// inside one entry is one entry.
+func TestAnnotateVulnCheckKEV_DuplicateIgnoresUndated(t *testing.T) {
+	root := t.TempDir()
+	sourcesRoot, outDir := filepath.Join(root, "sources"), filepath.Join(root, "unified")
+	writeVulnCheckCatalog(t, sourcesRoot, `[
+	  {"vendorProject": "Dated", "cve": ["CVE-2024-0001", "CVE-2024-0001"], "date_added": "2024-05-01T00:00:00Z"},
+	  {"vendorProject": "Undated", "cve": ["CVE-2024-0001"], "date_added": ""}
+	]`)
+	target := writeUnifiedCVE(t, outDir, "CVE-2024-0001")
+	if err := annotator.AnnotateVulnCheckKEV(context.Background(), sourcesRoot, outDir); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := readUnifiedFile(t, target); got.VulnCheckKEV == nil || got.VulnCheckKEV.VendorProject != "Dated" {
+		t.Errorf("record = %+v, want the dated entry", got.VulnCheckKEV)
+	}
+}
+
+// Empty upstream arrays stay empty arrays, not null.
+func TestAnnotateVulnCheckKEV_EmptyArraysStayArrays(t *testing.T) {
+	root := t.TempDir()
+	sourcesRoot, outDir := filepath.Join(root, "sources"), filepath.Join(root, "unified")
+	writeVulnCheckCatalog(t, sourcesRoot, vulncheckCatalogJSON)
+	target := writeUnifiedCVE(t, outDir, "CVE-2024-9999")
+	if err := annotator.AnnotateVulnCheckKEV(context.Background(), sourcesRoot, outDir); err != nil {
+		t.Fatal(err)
+	}
+	_, raw := readUnifiedFile(t, target)
+	var v map[string]json.RawMessage
+	if err := json.Unmarshal(raw["vulncheck_kev"], &v); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"xdb", "reported_exploitation", "cwes"} {
+		if string(v[k]) != "[]" {
+			t.Errorf("%s = %s, want []", k, v[k])
+		}
+	}
+}

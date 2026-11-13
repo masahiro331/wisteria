@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -188,6 +189,11 @@ type fetchSource struct {
 	optional bool
 }
 
+// optionalSourceTimeout bounds one optional source in `fetch all`, so a
+// third-party feed that accepts the connection and then stalls cannot hold
+// up the required sources behind it. A var so tests can shorten it.
+var optionalSourceTimeout = 5 * time.Minute
+
 // allSources is `fetch all`, in order.
 var allSources = []fetchSource{
 	{factory: osvFactory},
@@ -203,7 +209,7 @@ var allSources = []fetchSource{
 func fetchAll(ctx context.Context, opts fetchOptions, sources []fetchSource, out, errOut io.Writer) error {
 	for _, s := range sources {
 		f := s.factory(opts)
-		dir, err := f.Fetch(ctx)
+		dir, err := fetchOne(ctx, f, s.optional)
 		if err != nil {
 			if s.optional {
 				fmt.Fprintf(errOut, "warning: %s: %v\n", f.Name(), err)
@@ -214,6 +220,16 @@ func fetchAll(ctx context.Context, opts fetchOptions, sources []fetchSource, out
 		fmt.Fprintf(out, "saved %s data to %s\n", f.Name(), dir)
 	}
 	return nil
+}
+
+// fetchOne runs one source, under optionalSourceTimeout when it is optional.
+func fetchOne(ctx context.Context, f fetcher.Fetcher, optional bool) (string, error) {
+	if !optional {
+		return f.Fetch(ctx)
+	}
+	ctx, cancel := context.WithTimeout(ctx, optionalSourceTimeout)
+	defer cancel()
+	return f.Fetch(ctx)
 }
 
 func newFetchAllCmd() *cobra.Command {

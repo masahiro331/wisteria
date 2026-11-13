@@ -8,6 +8,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/masahiro331/wisteria/internal/fetcher"
 )
@@ -216,5 +217,43 @@ func TestFetchVulnCheckKEV_NoTokenWarns(t *testing.T) {
 	}
 	if !strings.Contains(errOut.String(), "warning: vulncheck-kev:") {
 		t.Errorf("stderr = %q", errOut.String())
+	}
+}
+
+type blockingFetcher struct{ calls *[]string }
+
+func (blockingFetcher) Name() string { return "vulncheck-kev" }
+
+func (b blockingFetcher) Fetch(ctx context.Context) (string, error) {
+	*b.calls = append(*b.calls, "vulncheck-kev")
+	<-ctx.Done()
+	return "", ctx.Err()
+}
+
+// An optional source that hangs is cut off after optionalSourceTimeout and
+// the rest of fetch all still runs.
+func TestFetchAll_OptionalSourceTimesOut(t *testing.T) {
+	old := optionalSourceTimeout
+	optionalSourceTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { optionalSourceTimeout = old })
+
+	var calls []string
+	var errOut bytes.Buffer
+	sources := []fetchSource{
+		{optional: true, factory: func(fetchOptions) fetcher.Fetcher { return blockingFetcher{calls: &calls} }},
+		stubSource("epss", nil, false, &calls),
+	}
+	done := make(chan error, 1)
+	go func() { done <- fetchAll(context.Background(), fetchOptions{}, sources, io.Discard, &errOut) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("fetchAll: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("fetchAll hung on the optional source")
+	}
+	if strings.Join(calls, ",") != "vulncheck-kev,epss" || !strings.Contains(errOut.String(), "warning: vulncheck-kev:") {
+		t.Errorf("calls = %v, stderr = %q", calls, errOut.String())
 	}
 }

@@ -245,6 +245,30 @@ type KEVRecord struct {
     CWEs                       []string   `json:"cwes,omitempty"`
 }
 
+// VulnCheckKEVRecord は VulnCheck KEV カタログの 1 エントリ。CISA KEV とは意味が違う
+// (VulnCheck は悪用の報告がある CVE も載せる。CISA KEV の上位集合) ので、KEV とは別のキー
+// `vulncheck_kev` に持つ。上流の全項目を保持し、日付は上流の RFC 3339 文字列のまま。
+// DueDate / CISADateAdded は CISA KEV にも載っているエントリだけ。空の配列は [] のまま。
+// 同じ CVE が複数エントリに出たら date_added が最も早いもの (日付の無いものは負ける) を残す。
+type VulnCheckKEVRecord struct {
+    From                       Provenance                 `json:"from"`
+    VendorProject              string                     `json:"vendor_project"`
+    Product                    string                     `json:"product"`
+    ShortDescription           string                     `json:"short_description"`
+    VulnerabilityName          string                     `json:"vulnerability_name"`
+    RequiredAction             string                     `json:"required_action"`
+    KnownRansomwareCampaignUse string                     `json:"known_ransomware_campaign_use"`
+    CWEs                       []string                   `json:"cwes"`
+    XDB                        []VulnCheckXDB             `json:"xdb"`                   // xdb_id, xdb_url, date_added, exploit_type, clone_ssh_url
+    ReportedExploitation       []VulnCheckReportedExploit `json:"reported_exploitation"` // url, date_added
+    ReportedByCanaries         bool                       `json:"reported_by_canaries"`
+    DueDate                    string                     `json:"due_date,omitempty"`
+    CISADateAdded              string                     `json:"cisa_date_added,omitempty"`
+    DateAdded                  string                     `json:"date_added"`
+    UpdatedAt                  string                     `json:"updated_at"`
+    Timestamp                  string                     `json:"timestamp"`
+}
+
 // ExploitDBRecord は Exploit-DB files_exploits.csv の 1 行分を保持する exploit シグナル。
 // 1 CVE-ID が複数の EDB-ID (platform / researcher 違い) を持ちうるため Exploits は slice。
 // catalog の行順を保つ (Stage 4 が CSV 順に append)。
