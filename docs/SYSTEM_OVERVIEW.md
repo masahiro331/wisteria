@@ -4,7 +4,7 @@
 
 **Wisteria** is a free, fast vulnerability database builder. It is a Go CLI that:
 
-1. Aggregates vulnerability data from public sources (OSV, MITRE CVEListV5, CISA KEV, FIRST EPSS, Exploit-DB).
+1. Aggregates vulnerability data from public sources (OSV, MITRE CVEListV5, CISA KEV, VulnCheck KEV, FIRST EPSS, Exploit-DB).
 2. Merges per-source advisories into a single `UnifiedAdvisory` record per PrimaryID, then annotates each record with KEV / EPSS / Exploit-DB signals.
 3. (Future) Enriches each record with AI-generated summaries, labels, and exploit analysis using a local LLM (Ollama) and the Claude API.
 4. (Future) Stores the unified, enriched data in PostgreSQL with a stable product identifier scheme.
@@ -26,7 +26,7 @@ See `docs/ROADMAP.md` for the per-phase task list.
 Production:
 
 ```
-wisteria fetch osv | cve | kev | epss | exploitdb | all
+wisteria fetch osv | cve | kev | vulncheck-kev | epss | exploitdb | all
 wisteria unify --cache-dir <path> [--concurrency N] [--cpuprofile <file>]
 ```
 
@@ -56,6 +56,7 @@ Default root: `os.UserCacheDir()/wisteria` (override via `--cache-dir` or `WISTE
 │   ├── osv/<ecosystem>/*.json
 │   ├── cve/cvelistV5-main/cves/<year>/<bucket>/CVE-*.json
 │   ├── kev/known_exploited_vulnerabilities.json
+│   ├── vulncheck-kev/vulncheck_known_exploited_vulnerabilities.json
 │   ├── epss/epss_scores-current.csv         ← gzip-decompressed at download time
 │   └── exploitdb/files_exploits.csv
 └── unified/                                 ← merge output (unify command)
@@ -72,15 +73,15 @@ Archives (`.zip`, `.tar.gz`, `.gz`) are removed after extraction.
   - `cmd/unify.go` is a thin wrapper around `internal/unified/pipeline.Run`.
   - `cmd/debug/` hosts the inspection subcommands (`debug index | unify | annotate | ai`).
 - `internal/fetcher/` — source integrations behind a shared `Fetcher` interface (`Name()`, `Fetch(ctx) (dir, error)`).
-  - `osv/`, `cve/`, `kev/`, `epss/`, `exploitdb/` — per-source fetchers.
+  - `osv/`, `cve/`, `kev/`, `vulncheckkev/`, `epss/`, `exploitdb/` — per-source fetchers. `vulncheckkev` needs `VULNCHECK_API_TOKEN` and is optional in `fetch all` (a failure is a warning).
   - `progress/` — fetcher-side progress UI (`mpb` wrapper).
 - `internal/unified/` — Stage 1-4 of the unified-advisory pipeline.
   - `walker/` (Stage 1) — index sources by PrimaryID.
   - `unifier/` (Stage 2) — `MergePrimary(ctx, sourcesRoot, primaryID, entries)` produces one `UnifiedAdvisory` per PrimaryID. Field-level merge functions (`mergeReferences` / `mergeDescriptions` / `mergeSeverities` / `mergeAffected`) share a generic `stableSortByPriority` helper.
   - `writer/` (Stage 3) — atomic per-record writes into the bucketed output tree.
-  - `annotator/` (Stage 4) — `RunAll` runs KEV → EPSS → ExploitDB in order against the existing `unified/` tree.
+  - `annotator/` (Stage 4) — `RunAll` runs KEV → VulnCheck KEV → EPSS → ExploitDB in order against the existing `unified/` tree.
   - `pipeline/` — orchestrates Stage 1-4 with a bounded errgroup fan-out.
-  - `osv/`, `cve/`, `kev/`, `epss/`, `exploitdb/` — typed schema types (1 byte not lost rule, see `docs/design/unified-advisory.md` §7).
+  - `osv/`, `cve/`, `kev/`, `vulncheckkev/`, `epss/`, `exploitdb/` — typed schema types (1 byte not lost rule, see `docs/design/unified-advisory.md` §7).
 - `internal/ai/` — Phase 2 scaffolding.
   - `ai.go` defines the `Summarizer` interface.
   - `ollama/` is the local-LLM client (chat API + structured output).

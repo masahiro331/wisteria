@@ -99,11 +99,12 @@ Stage 1-3 が書き出した unified ファイル群に対し、外部シグナ�
 
 - 入力ソース:
   - KEV: `<sourcesRoot>/kev/known_exploited_vulnerabilities.json` (JSON)
+  - VulnCheck KEV: `<sourcesRoot>/vulncheck-kev/vulncheck_known_exploited_vulnerabilities.json` (エントリの JSON 配列。VulnCheck の backup API の zip から取り出す。取得前に前回分を消すので、取得できなかった日は付かない)
   - EPSS: `<sourcesRoot>/epss/epss_scores-current.csv` (download 時に gzip 展開済みの plain CSV)
   - Exploit-DB: `<sourcesRoot>/exploitdb/files_exploits.csv` (1 行 = 1 exploit、`codes` カラムに CVE-ID を 0 個以上)
 - 該当 PrimaryID の unified ファイルが存在しない CVE-ID は **silent skip**。各カタログには他 source に観測されていない CVE もありうる前提。これを「シグナルだけの standalone unified」として作るかは未決定 (§12 参照)。
 - ファイル更新は plain `os.WriteFile`。Stage 4 はフル再構築の後段で動くため、書き込み中断時は次回 `wisteria unify` が Stage 1-3 から再生成する。
-- Stage 4 は Stage 3 への依存があるため、`wisteria unify` は 1-3-4 を直列で回す。Stage 4 内の順序は KEV → EPSS → Exploit-DB (各シグナルは互いに独立、別フィールド)。
+- Stage 4 は Stage 3 への依存があるため、`wisteria unify` は 1-3-4 を直列で回す。Stage 4 内の順序は KEV → VulnCheck KEV → EPSS → Exploit-DB (各シグナルは互いに独立、別フィールド)。
 - 後付けは Stage 1-3 のフル再構築の後段で行うので、毎回最新カタログを反映できる (差分更新の懸念なし)。
 
 ## 6. パッケージ構成
@@ -270,6 +271,7 @@ type UnifiedAdvisory struct {
     Weaknesses   []Weakness        `json:"weaknesses,omitempty"`  // CWE-ID で dedup
     Affected     []AffectedRecord  `json:"affected"`              // 並列保持
     KEV          *KEVRecord        `json:"kev,omitempty"`         // KEV カタログ入りの場合のみ非 nil
+    VulnCheckKEV *VulnCheckKEVRecord `json:"vulncheck_kev,omitempty"` // VulnCheck KEV 入りの場合のみ非 nil（CISA KEV とは別のキー）
     EPSS         *EPSSScore        `json:"epss,omitempty"`        // EPSS スコアがある場合のみ非 nil
     Exploits     []ExploitDBRecord `json:"exploits,omitempty"`    // Exploit-DB エントリ (1 CVE = N EDB-ID)
     Provenances  []Provenance      `json:"provenances"`           // 出所一覧

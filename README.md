@@ -21,13 +21,14 @@ make build
 
 ### 2. Fetch upstream sources
 
-Downloads OSV / MITRE CVEListV5 / CISA KEV / FIRST EPSS into `<cache-dir>/sources/`.
+Downloads OSV / MITRE CVEListV5 / CISA KEV / VulnCheck KEV / FIRST EPSS / Exploit-DB into `<cache-dir>/sources/`.
+VulnCheck KEV needs a free VulnCheck Community API token in `VULNCHECK_API_TOKEN`; without it `fetch all` warns and skips it.
 
 ```bash
 ./wisteria fetch all --cache-dir ./.cache/wisteria
 ```
 
-Per-source subcommands also exist: `fetch osv`, `fetch cve`, `fetch kev`, `fetch epss`. The default cache directory follows `$WISTERIA_CACHE_DIR` then `os.UserCacheDir()/wisteria`.
+Per-source subcommands also exist: `fetch osv`, `fetch cve`, `fetch kev`, `fetch vulncheck-kev`, `fetch epss`, `fetch exploitdb`. The default cache directory follows `$WISTERIA_CACHE_DIR` then `os.UserCacheDir()/wisteria`.
 
 ### 3. Build the unified advisory tree
 
@@ -71,6 +72,7 @@ Wisteria aggregates several upstream vulnerability catalogs. Each catalog retain
 - **OSV (osv.dev)** — Aggregated from per-ecosystem advisory databases (GHSA, PyPA, Go, RustSec, Debian/Ubuntu/Alpine, etc.). Each ecosystem retains its own license; many are CC-BY-4.0. Source: https://osv.dev
 - **MITRE CVEListV5** — Released under CC0 1.0 (public domain). Source: https://github.com/CVEProject/cvelistV5
 - **CISA Known Exploited Vulnerabilities (KEV)** — U.S. Government work, public domain. Source: https://www.cisa.gov/known-exploited-vulnerabilities-catalog
+- **VulnCheck KEV** — VulnCheck Known Exploited Vulnerabilities, free with a VulnCheck Community account. VulnCheck's terms require prominent attribution ("VulnCheck KEV") wherever the data is used or shown. Source: https://vulncheck.com/kev
 - **FIRST EPSS** — Free to use; citation recommended per FIRST.org. Source: https://www.first.org/epss
 - **Exploit-DB** — Provided by Offensive Security. Review the Exploit-DB terms before redistributing the dataset. Source: https://www.exploit-db.com/
 
