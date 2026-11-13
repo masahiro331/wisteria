@@ -1,4 +1,4 @@
-// Schema-coverage verifier for internal/unified/{osv,cve,kev}.
+// Schema-coverage verifier for internal/unified/{osv,cve,kev,vulncheckkev}.
 //
 // Walks <root> (default ./tmp/sources), parses each file two ways:
 //
@@ -50,6 +50,7 @@ import (
 	"github.com/masahiro331/wisteria/internal/unified/kev"
 	"github.com/masahiro331/wisteria/internal/unified/osv"
 	"github.com/masahiro331/wisteria/internal/unified/osv/ecosystem"
+	"github.com/masahiro331/wisteria/internal/unified/vulncheckkev"
 	"github.com/masahiro331/wisteria/pkg/advisory/cve"
 )
 
@@ -62,14 +63,17 @@ func main() {
 	missingOSV := newCounter()
 	missingCVE := newCounter()
 	missingKEV := newCounter()
+	missingVulnCheckKEV := newCounter()
 
 	checkOSV(*root, *perEcosystem, missingOSV)
 	checkCVE(*root, *perYear, missingCVE)
 	checkKEV(*root, missingKEV)
+	checkVulnCheckKEV(*root, missingVulnCheckKEV)
 
 	report("OSV", missingOSV)
 	report("CVE5", missingCVE)
 	report("KEV", missingKEV)
+	report("VulnCheck KEV", missingVulnCheckKEV)
 }
 
 // ----- per-source drivers -----
@@ -128,6 +132,13 @@ func checkKEV(root string, c *counter) {
 		var v kev.Catalog
 		err := json.Unmarshal(b, &v)
 		return v, err
+	})
+}
+
+func checkVulnCheckKEV(root string, c *counter) {
+	p := filepath.Join(root, "vulncheck-kev", vulncheckkev.CatalogFilename)
+	diffOne(p, c, func(b []byte) (any, error) {
+		return vulncheckkev.Read(bytes.NewReader(b))
 	})
 }
 
