@@ -99,11 +99,12 @@ Stage 1-3 が書き出した unified ファイル群に対し、外部シグナ�
 
 - 入力ソース:
   - KEV: `<sourcesRoot>/kev/known_exploited_vulnerabilities.json` (JSON)
+  - VulnCheck KEV: `<sourcesRoot>/vulncheck-kev/vulncheck_known_exploited_vulnerabilities.json` (エントリの JSON 配列。VulnCheck の backup API の zip から取り出す。取得前に前回分を消すので、取得できなかった日は付かない)
   - EPSS: `<sourcesRoot>/epss/epss_scores-current.csv` (download 時に gzip 展開済みの plain CSV)
   - Exploit-DB: `<sourcesRoot>/exploitdb/files_exploits.csv` (1 行 = 1 exploit、`codes` カラムに CVE-ID を 0 個以上)
 - 該当 PrimaryID の unified ファイルが存在しない CVE-ID は **silent skip**。各カタログには他 source に観測されていない CVE もありうる前提。これを「シグナルだけの standalone unified」として作るかは未決定 (§12 参照)。
 - ファイル更新は plain `os.WriteFile`。Stage 4 はフル再構築の後段で動くため、書き込み中断時は次回 `wisteria unify` が Stage 1-3 から再生成する。
-- Stage 4 は Stage 3 への依存があるため、`wisteria unify` は 1-3-4 を直列で回す。Stage 4 内の順序は KEV → EPSS → Exploit-DB (各シグナルは互いに独立、別フィールド)。
+- Stage 4 は Stage 3 への依存があるため、`wisteria unify` は 1-3-4 を直列で回す。Stage 4 内の順序は KEV → VulnCheck KEV → EPSS → Exploit-DB (各シグナルは互いに独立、別フィールド)。
 - 後付けは Stage 1-3 のフル再構築の後段で行うので、毎回最新カタログを反映できる (差分更新の懸念なし)。
 
 ## 6. パッケージ構成
@@ -244,6 +245,30 @@ type KEVRecord struct {
     CWEs                       []string   `json:"cwes,omitempty"`
 }
 
+// VulnCheckKEVRecord は VulnCheck KEV カタログの 1 エントリ。CISA KEV とは意味が違う
+// (VulnCheck は悪用の報告がある CVE も載せる。CISA KEV の上位集合) ので、KEV とは別のキー
+// `vulncheck_kev` に持つ。上流の全項目を保持し、日付は上流の RFC 3339 文字列のまま。
+// DueDate / CISADateAdded は CISA KEV にも載っているエントリだけ。空の配列は [] のまま。
+// 同じ CVE が複数エントリに出たら date_added が最も早いもの (日付の無いものは負ける) を残す。
+type VulnCheckKEVRecord struct {
+    From                       Provenance                 `json:"from"`
+    VendorProject              string                     `json:"vendor_project"`
+    Product                    string                     `json:"product"`
+    ShortDescription           string                     `json:"short_description"`
+    VulnerabilityName          string                     `json:"vulnerability_name"`
+    RequiredAction             string                     `json:"required_action"`
+    KnownRansomwareCampaignUse string                     `json:"known_ransomware_campaign_use"`
+    CWEs                       []string                   `json:"cwes"`
+    XDB                        []VulnCheckXDB             `json:"xdb"`                   // xdb_id, xdb_url, date_added, exploit_type, clone_ssh_url
+    ReportedExploitation       []VulnCheckReportedExploit `json:"reported_exploitation"` // url, date_added
+    ReportedByCanaries         bool                       `json:"reported_by_canaries"`
+    DueDate                    string                     `json:"due_date,omitempty"`
+    CISADateAdded              string                     `json:"cisa_date_added,omitempty"`
+    DateAdded                  string                     `json:"date_added"`
+    UpdatedAt                  string                     `json:"updated_at"`
+    Timestamp                  string                     `json:"timestamp"`
+}
+
 // ExploitDBRecord は Exploit-DB files_exploits.csv の 1 行分を保持する exploit シグナル。
 // 1 CVE-ID が複数の EDB-ID (platform / researcher 違い) を持ちうるため Exploits は slice。
 // catalog の行順を保つ (Stage 4 が CSV 順に append)。
@@ -270,6 +295,7 @@ type UnifiedAdvisory struct {
     Weaknesses   []Weakness        `json:"weaknesses,omitempty"`  // CWE-ID で dedup
     Affected     []AffectedRecord  `json:"affected"`              // 並列保持
     KEV          *KEVRecord        `json:"kev,omitempty"`         // KEV カタログ入りの場合のみ非 nil
+    VulnCheckKEV *VulnCheckKEVRecord `json:"vulncheck_kev,omitempty"` // VulnCheck KEV 入りの場合のみ非 nil（CISA KEV とは別のキー）
     EPSS         *EPSSScore        `json:"epss,omitempty"`        // EPSS スコアがある場合のみ非 nil
     Exploits     []ExploitDBRecord `json:"exploits,omitempty"`    // Exploit-DB エントリ (1 CVE = N EDB-ID)
     Provenances  []Provenance      `json:"provenances"`           // 出所一覧

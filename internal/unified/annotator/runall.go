@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// RunAll runs the three Stage 4 annotators in order — KEV, EPSS,
+// RunAll runs the Stage 4 annotators in order — KEV, VulnCheck KEV, EPSS,
 // ExploitDB — against an existing Stage 3 unified/ tree. Per-stage
 // elapsed time is written to w; passing nil for w is fine for tests /
 // scripts that don't want output.
@@ -19,7 +19,7 @@ import (
 // wants no extra prefix). Pass "" for the no-prefix shape.
 //
 // Order is fixed: KEV first (~1500 entries) to surface missing-target
-// issues quickly, then EPSS, then ExploitDB. The three annotators
+// issues quickly, then VulnCheck KEV, EPSS, ExploitDB. The annotators
 // write disjoint fields so a different order would be functionally
 // equivalent — but the timing log is easier to read when the cheapest
 // stage runs first.
@@ -33,6 +33,7 @@ func RunAll(ctx context.Context, sourcesRoot, outDir string, w io.Writer, linePr
 		fn   func(context.Context, string, string) error
 	}{
 		{"kev", AnnotateKEV},
+		{"vulncheck-kev", AnnotateVulnCheckKEV},
 		{"epss", AnnotateEPSS},
 		{"exploitdb", AnnotateExploitDB},
 	}

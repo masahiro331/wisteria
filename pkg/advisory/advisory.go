@@ -25,6 +25,10 @@ const (
 	SourceKEV       SourceKind = "kev"
 	SourceEPSS      SourceKind = "epss"
 	SourceExploitDB SourceKind = "exploitdb"
+	// SourceVulnCheckKEV is the VulnCheck KEV catalog (VulnCheck Known
+	// Exploited Vulnerabilities). Shown data must carry the "VulnCheck KEV"
+	// attribution VulnCheck's terms require.
+	SourceVulnCheckKEV SourceKind = "vulncheck-kev"
 )
 
 // Provenance is the "where did this come from" trail attached to every
@@ -125,6 +129,45 @@ type KEVRecord struct {
 	CWEs                       []string   `json:"cwes,omitempty"`
 }
 
+// VulnCheckKEVRecord is one VulnCheck KEV catalog entry, every upstream
+// field kept. It sits beside KEVRecord rather than inside it: CISA KEV and
+// VulnCheck KEV mean different things (VulnCheck lists CVEs reported as
+// exploited, a superset of CISA). Dates are the upstream RFC 3339 strings;
+// DueDate and CISADateAdded are set only for entries also in CISA KEV.
+type VulnCheckKEVRecord struct {
+	From                       Provenance                 `json:"from"`
+	VendorProject              string                     `json:"vendor_project"`
+	Product                    string                     `json:"product"`
+	ShortDescription           string                     `json:"short_description"`
+	VulnerabilityName          string                     `json:"vulnerability_name"`
+	RequiredAction             string                     `json:"required_action"`
+	KnownRansomwareCampaignUse string                     `json:"known_ransomware_campaign_use"`
+	CWEs                       []string                   `json:"cwes"`
+	XDB                        []VulnCheckXDB             `json:"xdb"`
+	ReportedExploitation       []VulnCheckReportedExploit `json:"reported_exploitation"`
+	ReportedByCanaries         bool                       `json:"reported_by_canaries"`
+	DueDate                    string                     `json:"due_date,omitempty"`
+	CISADateAdded              string                     `json:"cisa_date_added,omitempty"`
+	DateAdded                  string                     `json:"date_added"`
+	UpdatedAt                  string                     `json:"updated_at"`
+	Timestamp                  string                     `json:"timestamp"`
+}
+
+// VulnCheckXDB is one exploit VulnCheck XDB lists for the CVE.
+type VulnCheckXDB struct {
+	ID          string `json:"xdb_id"`
+	URL         string `json:"xdb_url"`
+	DateAdded   string `json:"date_added"`
+	ExploitType string `json:"exploit_type"`
+	CloneSSHURL string `json:"clone_ssh_url"`
+}
+
+// VulnCheckReportedExploit is one citation for the CVE being exploited.
+type VulnCheckReportedExploit struct {
+	URL       string `json:"url"`
+	DateAdded string `json:"date_added"`
+}
+
 // ExploitDBRecord is one row of the Exploit-DB files_exploits.csv catalog.
 // Stage 4 attaches one or more of these to an existing UnifiedAdvisory:
 // a single CVE-ID can have multiple EDB-IDs (different platforms,
@@ -149,17 +192,18 @@ type ExploitDBRecord struct {
 // Modified is the latest time any source touched it. Zero (absent in
 // JSON) when no source carried the respective date.
 type UnifiedAdvisory struct {
-	PrimaryID    string            `json:"primary_id"`
-	SourceIDs    []string          `json:"source_ids,omitempty"`
-	Published    time.Time         `json:"published,omitzero"`
-	Modified     time.Time         `json:"modified,omitzero"`
-	Descriptions []Description     `json:"descriptions"`
-	References   []Reference       `json:"references"`
-	Severities   []Severity        `json:"severities"`
-	Weaknesses   []Weakness        `json:"weaknesses,omitempty"`
-	Affected     []AffectedRecord  `json:"affected"`
-	KEV          *KEVRecord        `json:"kev,omitempty"`
-	EPSS         *EPSSScore        `json:"epss,omitempty"`
-	Exploits     []ExploitDBRecord `json:"exploits,omitempty"`
-	Provenances  []Provenance      `json:"provenances"`
+	PrimaryID    string              `json:"primary_id"`
+	SourceIDs    []string            `json:"source_ids,omitempty"`
+	Published    time.Time           `json:"published,omitzero"`
+	Modified     time.Time           `json:"modified,omitzero"`
+	Descriptions []Description       `json:"descriptions"`
+	References   []Reference         `json:"references"`
+	Severities   []Severity          `json:"severities"`
+	Weaknesses   []Weakness          `json:"weaknesses,omitempty"`
+	Affected     []AffectedRecord    `json:"affected"`
+	KEV          *KEVRecord          `json:"kev,omitempty"`
+	VulnCheckKEV *VulnCheckKEVRecord `json:"vulncheck_kev,omitempty"`
+	EPSS         *EPSSScore          `json:"epss,omitempty"`
+	Exploits     []ExploitDBRecord   `json:"exploits,omitempty"`
+	Provenances  []Provenance        `json:"provenances"`
 }
