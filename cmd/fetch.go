@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -13,6 +16,7 @@ import (
 	"github.com/masahiro331/wisteria/internal/fetcher/kev"
 	"github.com/masahiro331/wisteria/internal/fetcher/osv"
 	"github.com/masahiro331/wisteria/internal/fetcher/progress"
+	"github.com/masahiro331/wisteria/internal/fetcher/vulncheckkev"
 )
 
 // fetchOptions bundles common per-invocation knobs read from CLI flags.
@@ -55,6 +59,17 @@ func kevFactory(opts fetchOptions) fetcher.Fetcher {
 		kev.WithCacheDir(opts.cacheDir),
 		kev.WithProgress(opts.tracker),
 		kev.WithRetries(opts.retries),
+	)
+}
+
+// vulncheckKEVFactory reads the token from VULNCHECK_API_TOKEN; without it
+// the fetcher reports fetcher.ErrNotConfigured.
+func vulncheckKEVFactory(opts fetchOptions) fetcher.Fetcher {
+	return vulncheckkev.New(
+		vulncheckkev.WithToken(os.Getenv(vulncheckkev.TokenEnv)),
+		vulncheckkev.WithCacheDir(opts.cacheDir),
+		vulncheckkev.WithProgress(opts.tracker),
+		vulncheckkev.WithRetries(opts.retries),
 	)
 }
 
@@ -128,6 +143,7 @@ func newFetchCmd() *cobra.Command {
 		newFetchSourceCmd("osv", "Fetch OSV vulnerability data", osvFactory),
 		newFetchSourceCmd("cve", "Fetch MITRE CVEListV5 data", cveFactory),
 		newFetchSourceCmd("kev", "Fetch CISA Known Exploited Vulnerabilities catalog", kevFactory),
+		newFetchSourceCmd("vulncheck-kev", "Fetch the VulnCheck KEV catalog (needs VULNCHECK_API_TOKEN)", vulncheckKEVFactory),
 		newFetchSourceCmd("epss", "Fetch FIRST EPSS daily score catalog", epssFactory),
 		newFetchSourceCmd("exploitdb", "Fetch Exploit-DB files_exploits.csv catalog", exploitDBFactory),
 		newFetchAllCmd(),
@@ -151,6 +167,10 @@ func newFetchSourceCmd(use, short string, factory fetcherFactory) *cobra.Command
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			f := factory(optionsFromCmd(cmd))
 			dir, err := f.Fetch(cmd.Context())
+			if errors.Is(err, fetcher.ErrNotConfigured) {
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s: %v\n", f.Name(), err)
+				return nil
+			}
 			if err != nil {
 				return err
 			}
@@ -160,21 +180,48 @@ func newFetchSourceCmd(use, short string, factory fetcherFactory) *cobra.Command
 	}
 }
 
+// fetchSource is one source `fetch all` runs. An optional source's failure
+// (including not being configured) is a warning, not the end of the run:
+// a third-party feed being down must not stop the daily rebuild.
+type fetchSource struct {
+	factory  fetcherFactory
+	optional bool
+}
+
+// allSources is `fetch all`, in order.
+var allSources = []fetchSource{
+	{factory: osvFactory},
+	{factory: cveFactory},
+	{factory: kevFactory},
+	{factory: vulncheckKEVFactory, optional: true},
+	{factory: epssFactory},
+	{factory: exploitDBFactory},
+}
+
+// fetchAll runs the sources in order. A required source's error ends the
+// run; an optional one's is written to errOut as a warning.
+func fetchAll(ctx context.Context, opts fetchOptions, sources []fetchSource, out, errOut io.Writer) error {
+	for _, s := range sources {
+		f := s.factory(opts)
+		dir, err := f.Fetch(ctx)
+		if err != nil {
+			if s.optional {
+				fmt.Fprintf(errOut, "warning: %s: %v\n", f.Name(), err)
+				continue
+			}
+			return fmt.Errorf("%s: %w", f.Name(), err)
+		}
+		fmt.Fprintf(out, "saved %s data to %s\n", f.Name(), dir)
+	}
+	return nil
+}
+
 func newFetchAllCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "all",
 		Short: "Fetch every supported source",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			factories := []fetcherFactory{osvFactory, cveFactory, kevFactory, epssFactory, exploitDBFactory}
-			for _, factory := range factories {
-				f := factory(optionsFromCmd(cmd))
-				dir, err := f.Fetch(cmd.Context())
-				if err != nil {
-					return fmt.Errorf("%s: %w", f.Name(), err)
-				}
-				fmt.Fprintf(cmd.OutOrStdout(), "saved %s data to %s\n", f.Name(), dir)
-			}
-			return nil
+			return fetchAll(cmd.Context(), optionsFromCmd(cmd), allSources, cmd.OutOrStdout(), cmd.ErrOrStderr())
 		},
 	}
 }
